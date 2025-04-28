@@ -4,11 +4,11 @@ from telegram import Update, InputFile
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 import asyncio
 
-# Đọc token từ biến môi trường để bảo mật hơn
-TOKEN = os.getenv('7201356785:AAE93_9W2SfEB_9lDwmtd_wcQsZ1EEEng6s')  # Bạn cần set biến môi trường BOT_TOKEN trước khi chạy
-
+# Hỏi token khi chạy
+## TOKEN = input("Nhập token bot Telegram của bạn: ").strip()
+TOKEN = "7201356785:AAE93_9W2SfEB_9lDwmtd_wcQsZ1EEEng6s" 
 if not TOKEN:
-    raise ValueError("Bạn cần thiết lập biến môi trường BOT_TOKEN.")
+    raise ValueError("Bạn phải nhập token.")
 
 # Lệnh /thumb: Người dùng reply tin nhắn chứa file audio với /thumb để bắt đầu xử lý
 async def handle_thumb(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -48,13 +48,11 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text('Vui lòng gửi ảnh hợp lệ (JPG/PNG).')
         return
 
-    # Tải file ảnh
     img_data = await file.download_as_bytearray()
     thumb_buf = BytesIO(img_data)
-    thumb_buf.name = 'thumb.jpg'  # Telegram yêu cầu thumbnail phải có tên
+    thumb_buf.name = 'thumb.jpg'
     thumb_buf.seek(0)
 
-    # Hàm gửi audio kèm thumbnail
     async def send_audio_with_thumb():
         audio_file = await context.bot.get_file(pending['file_id'])
         audio_data = await audio_file.download_as_bytearray()
@@ -63,25 +61,4 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
         audio_buf.seek(0)
 
         await context.bot.send_audio(
-            chat_id=msg.chat.id,
-            audio=InputFile(audio_buf, filename=filename),
-            thumb=InputFile(thumb_buf),
-            title=filename,
-            performer='',
-            reply_to_message_id=pending['reply_message_id']
-        )
-
-    # Thực hiện gửi
-    results = await asyncio.gather(send_audio_with_thumb(), return_exceptions=True)
-    for result in results:
-        if isinstance(result, Exception):
-            await msg.reply_text(f'Đã xảy ra lỗi: {result}')
-
-    context.user_data.pop('pending', None)
-
-if __name__ == '__main__':
-    app = ApplicationBuilder().token(TOKEN).build()
-    app.add_handler(CommandHandler('thumb', handle_thumb))
-    app.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, handle_image))
-    print('Bot đang chạy...')
-    app.run_polling()
+            chat_id
