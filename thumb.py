@@ -1,4 +1,4 @@
-limport os
+import os
 from io import BytesIO
 from telegram import Update, InputFile
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
