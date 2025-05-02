@@ -24,7 +24,10 @@ ACCEPT_LANGUAGES = ["en-US,en;q=0.9", "fr-FR,fr;q=0.9", "es-ES,es;q=0.9", "de-DE
 # TÔN TRỌNG TÁC GIẢ, KHÔNG XÓA DÒNG NÀY
 # SOURCE API SOUNDCLOUD SEARCH AND DOWNLOAD BY HOANG ANH
 
-token = "7589642338:AAGMmfoW0NWKzeJz2iIKRRIh31yjv8Hfb4w"  ##  input("Nhập API Token Bot Telegram: ")
+token = os.getenv("TELEGRAM_TOKEN")
+if not token:
+    raise ValueError("Missing TELEGRAM_TOKEN in environment variables")
+
 bot = telebot.TeleBot(token)
 
 def get_random_element(array):
