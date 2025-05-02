@@ -2,3 +2,4 @@ pyTelegramBotAPI
 requests
 python-telegram-bot 
 pillow
+beautifulsoup4
