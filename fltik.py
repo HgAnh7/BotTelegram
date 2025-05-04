@@ -12,8 +12,6 @@ def get_token():
 def main():
     
     while True:
-        
-        elif luachon == 3:
             user = "hganh_7"
             if user[0]!='@' :
                 user = '@'+user
