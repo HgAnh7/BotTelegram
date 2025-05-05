@@ -1,10 +1,17 @@
 import telebot
 import requests
 import time
+import os
+
+TOKEN = os.getenv("YOUR_BOT_TOKEN")
+if not TOKEN:
+    raise ValueError("Missing YOUR_BOT_TOKEN in environment variables")
+
+bot = telebot.TeleBot(TOKEN)
 
 # Token bot Telegram
-TOKEN = "YOUR_BOT_TOKEN"
-bot = telebot.TeleBot(TOKEN)
+#TOKEN = "YOUR_BOT_TOKEN"
+#bot = telebot.TeleBot(TOKEN)
 
 @bot.message_handler(commands=['fl'])
 def handle_buff(message):
