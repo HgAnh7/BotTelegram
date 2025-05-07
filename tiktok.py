@@ -3,6 +3,10 @@ import re
 import telebot
 import requests
 from datetime import datetime
+from flask import Flask, request
+
+# Khởi tạo Flask app
+app = Flask(__name__)
 
 # Token Telegram Bot
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -34,6 +38,7 @@ def strip_emojis(content):
     )
     return emoji_regex.sub(r'', content)
 
+# Xử lý lệnh /tiktok từ message
 @telegram_bot.message_handler(commands=['tiktok'])
 def fetch_tiktok_data(message):
     try:
@@ -87,6 +92,23 @@ def fetch_tiktok_data(message):
     except Exception as error:
         telegram_bot.reply_to(message, f"• Lỗi: {error}")
 
-# ✅ Duy nhất dòng này in ra terminal
-print("Bot TikTok đang hoạt động...")
-telegram_bot.polling()
+# Route để Telegram gọi webhook
+@app.route(f'/{BOT_TOKEN}', methods=['POST'])
+def webhook():
+    json_str = request.get_data().decode('UTF-8')
+    update = telebot.types.Update.de_json(json_str)
+    telegram_bot.process_new_updates([update])
+    return "!", 200
+
+# Cấu hình webhook với Telegram API
+def set_webhook():
+    webhook_url = f'https://<your-railway-url>/{BOT_TOKEN}'  # Sử dụng URL của Railway
+    telegram_bot.remove_webhook()
+    telegram_bot.set_webhook(url=webhook_url)
+
+if __name__ == "__main__":
+    # Thiết lập webhook
+    set_webhook()
+    
+    # Chạy Flask app trên Railway
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
