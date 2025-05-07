@@ -1,8 +1,7 @@
 # Share by Hoang Anh
 # t.me/HgAnh_7
-# Update date: 4/24/2025
+# Update: 7/5/2025
 
-import os
 import re
 import json
 import time
@@ -23,12 +22,9 @@ USER_AGENTS = [
 ACCEPT_LANGUAGES = ["en-US,en;q=0.9", "fr-FR,fr;q=0.9", "es-ES,es;q=0.9", "de-DE,de;q=0.9", "zh-CN,zh;q=0.9"]
 
 # TÔN TRỌNG TÁC GIẢ, KHÔNG XÓA DÒNG NÀY
-# SOURCE API SOUNDCLOUD SEARCH AND DOWNLOAD BY HOANG ANH
+# SOURCE API SOUNDCLOUD SEARCH AND DOWNLOAD BY HOANGANH
 
 token = os.getenv("TELEGRAM_TOKEN")
-if not token:
-    raise ValueError("Missing TELEGRAM_TOKEN in environment variables")
-
 bot = telebot.TeleBot(token)
 
 def get_random_element(array):
@@ -197,7 +193,7 @@ def handle_soundcloud_selection(msg):
     del soundcloud_data[reply_id]
 
 def main():
-    print("Bot đang hoạt động...")
+    print("Bot scl đang hoạt động...")
     bot.polling(none_stop=True)
 
 if __name__ == "__main__":
