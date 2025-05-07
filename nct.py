@@ -1,6 +1,5 @@
 # TÔN TRỌNG TÁC GIẢ, KHÔNG XÓA DÒNG NÀY
 # SOURCE API NHACCUATUI SEARCH AND DOWNLOAD BY HOANGANH
-
 import os
 import re
 import random
@@ -71,11 +70,12 @@ def search_nhaccuatui(keyword, limit=10):
             title = title_elem.get_text(separator=' ', strip=True)
             artist = 'Unknown'
             if artist_elem:
-                artist_link = artist_elem.select_one('a')
-                if artist_link:
-                    artist = artist_link.get_text(strip=True)
+                artist_links = artist_elem.select('a')
+                if artist_links:
+                    artists = [a.get_text(separator=' ', strip=True) for a in artist_links]
+                    artist = ', '.join(artists)
                 else:
-                    artist = artist_elem.get_text(strip=True)
+                    artist = artist_elem.get_text(separator=' ', strip=True)
             tracks.append({
                 'title': title,
                 'artist': artist,
