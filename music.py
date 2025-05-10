@@ -1,4 +1,3 @@
-# Telegram: @HgAnh_7
 import os
 import re
 import json
@@ -62,10 +61,8 @@ def get_client_id():
                 config = json.load(f)
             if config.get('client_id'):
                 return config['client_id']
-        # Tải trang để tìm script chứa client_id
         resp = requests.get("https://soundcloud.com/", headers=get_headers("https://soundcloud.com/"))
         resp.raise_for_status()
-        # Tìm URL script chứa client_id
         scripts = re.findall(r'<script crossorigin src="([^\"]+)"', resp.text)
         script_urls = [url for url in scripts if url.startswith("https")]
         script_resp = requests.get(script_urls[-1], headers=get_headers(script_urls[-1]))
@@ -79,7 +76,6 @@ def get_client_id():
             return client_id
     except Exception as e:
         logging.error(f"Error fetching SoundCloud client_id: {e}")
-    # Fallback
     return 'W00nmY7TLer3uyoEo1sWK3Hhke5Ahdl9'
 
 # Tìm kiếm bài hát trên SoundCloud
@@ -109,7 +105,6 @@ def get_music_stream_url(track):
         resp = requests.get(resolve_url, headers=get_headers("https://soundcloud.com/"))
         resp.raise_for_status()
         data = resp.json()
-        # Tìm progressive link
         progressive = next((t['url'] for t in data.get('media', {}).get('transcodings', []) if t['format']['protocol'] == 'progressive'), None)
         if not progressive:
             raise ValueError("No progressive URL")
@@ -150,6 +145,11 @@ def handle_scl_selection(msg):
     except:
         bot.reply_to(msg, "🚫 Số không hợp lệ.", parse_mode='HTML')
         return
+    # Xóa tin nhắn danh sách kết quả
+    try:
+        bot.delete_message(msg.chat.id, msg.reply_to_message.message_id)
+    except:
+        pass
     bot.reply_to(msg, f"🧭 Đang tải: {track['title']}", parse_mode='HTML')
     audio_url = get_music_stream_url(track)
     thumb = track.get('artwork_url', '').replace('-large', '-t500x500')
@@ -244,6 +244,11 @@ def handle_nct_selection(msg):
     except:
         bot.reply_to(msg, '🚫 Số không hợp lệ.')
         return
+    # Xóa tin nhắn danh sách kết quả
+    try:
+        bot.delete_message(msg.chat.id, msg.reply_to_message.message_id)
+    except:
+        pass
     bot.reply_to(msg, f"🧭 Đang tải: {track['title']}")
     audio_url = get_download_url(track)
     if not audio_url:
