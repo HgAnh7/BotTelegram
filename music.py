@@ -7,8 +7,8 @@ import logging
 import telebot
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin
 import xml.etree.ElementTree as ET
+from urllib.parse import urljoin
 
 # --- CẤU HÌNH ---
 # Lấy token từ biến môi trường
@@ -65,7 +65,8 @@ def get_client_id():
         # Tải trang để tìm script chứa client_id
         resp = requests.get("https://soundcloud.com/", headers=get_headers("https://soundcloud.com/"))
         resp.raise_for_status()
-        scripts = re.findall(r'<script crossorigin src="([^\"]+)", resp.text)
+        # Tìm URL script chứa client_id
+        scripts = re.findall(r'<script crossorigin src="([^\"]+)"', resp.text)
         script_urls = [url for url in scripts if url.startswith("https")]
         script_resp = requests.get(script_urls[-1], headers=get_headers(script_urls[-1]))
         script_resp.raise_for_status()
@@ -195,7 +196,7 @@ def get_download_url(track):
     try:
         resp = requests.get(track['detail_url'], headers=get_headers(track['detail_url']))
         resp.raise_for_status()
-        match = re.search(r"peConfig\.xmlURL\s*=\s*'([^']+)'", resp.text)
+        match = re.search(r"peConfig\.xmlURL\s*=\s*['\"](https://www\.nhaccuatui\.com/flash/xml\?html5=true&key1=[^'\"]+)['\"]", resp.text)
         xml_url = match.group(1) if match else None
         if not xml_url:
             return None
@@ -204,7 +205,11 @@ def get_download_url(track):
         root = ET.fromstring(xml_resp.text)
         loc = root.find('.//location')
         url = loc.text.strip() if loc is not None else None
-        return url if url.startswith('http') else 'https:' + url
+        if url and url.startswith('//'):
+            url = 'https:' + url
+        elif url and url.startswith('http://'):
+            url = 'https://' + url[len('http://'):]
+        return url
     except Exception as e:
         logging.error(f"Error fetching NCT download URL: {e}")
         return None
