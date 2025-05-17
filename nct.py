@@ -7,20 +7,15 @@ import logging
 import telebot
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 import xml.etree.ElementTree as ET
-from urllib.parse import quote_plus, urljoin
 
 # --- CẤU HÌNH ---
-# Nhận token từ người dùng nhập vào
-token = os.getenv("TELEGRAM_TOKEN")
+token = os.getenv("TELEGRAM_TOKEN") # <-- Token người dùng
 bot = telebot.TeleBot(token)
 
-# Khởi tạo session để lưu cookies
-debug = True  # Bật/tắt chế độ debug
-session = requests.Session()
-
 # Cấu hình logging
-logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Thông tin API NhacCuaTui
 BASE_URL = 'https://www.nhaccuatui.com'
@@ -48,10 +43,9 @@ def get_headers():
 
 # 1. Tìm kiếm bài hát, trả về danh sách track với title, artist, id, detail_url
 def search_nhaccuatui(keyword, limit=10):
-    session.get(BASE_URL, headers=get_headers())  # Lấy cookie
     params = {'q': keyword, 'b': 'keyword', 'l': 'tat-ca', 's': 'default'}
     try:
-        resp = session.get(API_SEARCH, params=params, headers=get_headers())
+        resp = requests.get(API_SEARCH, params=params, headers=get_headers())
         resp.raise_for_status()
         html = resp.text
     except requests.exceptions.RequestException as e:
@@ -89,24 +83,39 @@ def get_download_url(track):
     detail_url = track.get('detail_url')
     if not detail_url:
         return None
+    # Khởi tạo thumbnail mặc định
+    track['thumbnail'] = None
     try:
-        resp = session.get(detail_url, headers=get_headers())
+        resp = requests.get(detail_url, headers=get_headers())
         resp.raise_for_status()
         html = resp.text
     except requests.exceptions.RequestException as e:
         logging.error(f"Lỗi request đến trang chi tiết ({detail_url}): {e}")
         return None
 
+    # --- BỔ SUNG: Trích thumbnail từ meta og:image ---
+    try:
+        soup = BeautifulSoup(html, 'html.parser')
+        og_image = soup.select_one('meta[property="og:image"]')
+        if og_image and og_image.has_attr('content'):
+            thumb_url = og_image['content'].strip()
+            # Chuẩn hóa URL nếu cần
+            if thumb_url.startswith('//'):
+                thumb_url = 'https:' + thumb_url
+            track['thumbnail'] = thumb_url
+    except Exception as e:
+        logging.warning(f"Không lấy được thumbnail từ {detail_url}: {e}")
+        track['thumbnail'] = None
+
     # Trích xmlURL trong JS
     xml_match = re.search(r"peConfig\.xmlURL\s*=\s*['\"](https://www\.nhaccuatui\.com/flash/xml\?html5=true&key1=[^'\"]+)['\"]", html)
     if not xml_match:
-        if debug:
-            logging.warning(f"Không tìm thấy xmlURL trong trang: {detail_url}")
+        logging.warning(f"Không tìm thấy xmlURL trong trang: {detail_url}")
         return None
     xml_url = xml_match.group(1)
 
     try:
-        xml_resp = session.get(xml_url, headers={**get_headers(), 'Referer': detail_url})
+        xml_resp = requests.get(xml_url, headers={**get_headers(), 'Referer': detail_url})
         xml_resp.raise_for_status()
         xml_content = xml_resp.text
     except requests.exceptions.RequestException as e:
@@ -130,45 +139,76 @@ def get_download_url(track):
 
 # /nct command
 @bot.message_handler(commands=['nct'])
-def cmd_nct_search(message):
-    parts = message.text.split(maxsplit=1)
-    if len(parts) < 2:
-        bot.reply_to(message, '🚫 Vui lòng nhập từ khóa. Ví dụ: /nct Tên bài hát')
+def nhaccuatui(message):
+    args = message.text.split(maxsplit=1)
+    if len(args) < 2:
+        bot.reply_to(message, '🚫 Vui lòng nhập tên bài hát muốn tìm kiếm.\nVí dụ: /nct Tên bài hát', parse_mode='HTML')
         return
-    keyword = parts[1].strip()
-    tracks = search_nhaccuatui(keyword)
-    if not tracks:
-        bot.reply_to(message, '🚫 Không tìm thấy kết quả.')
+    keyword = args[1].strip()
+    results = search_nhaccuatui(keyword)
+    if not results:
+        bot.reply_to(message, f'🚫 Không tìm thấy bài hát nào với từ khóa: {keyword}', parse_mode='HTML')
         return
-    text = ''
-    for i, t in enumerate(tracks, 1):
-        text += f"{i}. {t['title']}\n"
-        text += f"👤 Nghệ sĩ: {t['artist']}\n"
-        text += f"🆔 ID: {t['id']}\n\n"
-    text += '💡 Trả lời tin nhắn này bằng số từ 1-10 để chọn bài hát!'
-    sent = bot.reply_to(message, text)
-    nct_data[sent.message_id] = {'user_id': message.from_user.id, 'tracks': tracks}
+    songs = results[:10]
+    text = '<b>🎵 Kết quả tìm kiếm trên Nhaccuatui</b>\n\n'
+    for i, song in enumerate(songs, 1):
+        text += f"<b>{i}. {song['title']}</b>\n"
+        text += f"👤 Nghệ sĩ: {song['artist']}\n"
+        text += f"🆔 ID: {song['id']}\n\n"
+    text += '<b>💡 Trả lời tin nhắn này bằng số từ 1-10 để chọn bài hát!</b>'
+    sent = bot.reply_to(message, text, parse_mode='HTML')
+    nct_data[sent.message_id] = {
+        'user_id': message.from_user.id,
+        'songs': songs
+     }
 
 # Xử lý chọn bài
 @bot.message_handler(func=lambda m: m.reply_to_message and m.reply_to_message.message_id in nct_data)
 def handle_nct_selection(msg):
-    data = nct_data[msg.reply_to_message.message_id]
-    if msg.from_user.id != data['user_id']:
+    reply_id = msg.reply_to_message.message_id
+    if reply_id not in nct_data:
         return
-    try:
-        idx = int(msg.text.strip()) - 1
-        if idx < 0 or idx >= len(data['tracks']): raise ValueError
-    except ValueError:
-        bot.reply_to(msg, '🚫 Số không hợp lệ.')
+    user_id = msg.from_user.id
+
+    data = nct_data[reply_id]
+    if user_id != data['user_id']:
         return
-    track = data['tracks'][idx]
-    bot.reply_to(msg, f"🧭 Đang tải: {track['title']}")
-    audio_url = get_download_url(track)
+    text = msg.text.strip()
+    if not text.isdigit():
+        bot.reply_to(msg, '🚫 Vui lòng chỉ nhập số từ 1-10.', parse_mode='HTML')
+        return
+    idx = int(text) - 1
+    if idx < 0 or idx >= len(data['songs']):
+        bot.reply_to(msg, '🚫 Số không hợp lệ. Hãy nhập số từ 1-10.')
+        return
+    song = data['songs'][idx]
+    bot.delete_message(msg.chat.id, reply_id)
+    bot.reply_to(msg, f"🧭 Đang tải: {song['title']} - {song['artist']}")
+    audio_url = get_download_url(song)
     if not audio_url:
-        bot.reply_to(msg, '🚫 Không thể tải nhạc. Vui lòng kiểm tra log để biết thêm chi tiết.')
+        bot.reply_to(msg, '🚫 Không thể tải bài hát này.')
         return
-    bot.send_audio(msg.chat.id, audio_url, title=track['title'], performer=track['artist'])
-    del nct_data[msg.reply_to_message.message_id]
+    thumbnail_url = song.get("thumbnail")
+    caption = f"""
+╭────────────────────⭓
+│ Tên nhạc: <b>{song['title']}</b>
+│ Nghệ sĩ: {song['artist']}
+│ Nguồn: <b>NhacCuaTui</b> 
+╰────────────────────⭓
+"""
+    thumbnail_url = song.get("thumbnail")
+    if thumbnail_url:
+        try:
+            bot.send_photo(msg.chat.id, thumbnail_url, caption=caption, parse_mode='HTML')
+        except Exception:
+            bot.reply_to(msg, caption + "\n🚫 Không thể tải thumbnail.", parse_mode='HTML')
+    else:
+        bot.reply_to(msg, caption, parse_mode='HTML')
+    try:
+        bot.send_audio(msg.chat.id, audio_url, title=song['title'], performer=song['artist'])
+    except Exception:
+        bot.reply_to(msg, '🚫 Không thể gửi audio.', parse_mode='HTML')
+    del nct_data[reply_id]
 
 if __name__ == '__main__':
     print('Bot NhacCuaTui đang chạy...')
