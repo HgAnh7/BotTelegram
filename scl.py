@@ -1,6 +1,3 @@
-# Share by Hoang Anh
-# t.me/HgAnh_7
-# Update: 7/5/2025
 import os
 import re
 import json
@@ -179,11 +176,14 @@ def handle_soundcloud_selection(msg):
     if not audio_url or not thumbnail_url:
         bot.reply_to(msg, "🚫 Không tìm thấy nguồn audio hoặc thumbnail.", parse_mode='HTML')
         return
-    caption = f"<b>🎵 {track['title']}</b>\n"
-    caption += f"👤 Nghệ sĩ: {track['user']['username']}\n"
-    caption += f"📊 Lượt nghe: {track['playback_count']:,} | Thích: {track['likes_count']:,}\n"
-    caption += f"🎧 Nguồn: SoundCloud\n"
-    caption += f"🎉 Chúc bạn thưởng thức âm nhạc vui vẻ!"
+    caption = f"""
+╭────────────────────⭓
+│ Tên nhạc: <b>{track['title']}</b>
+│ Nghệ sĩ: {track['user']['username']}
+│ Lượt nghe: {track['playback_count']:,} | Lượt thích: {track['likes_count']:,}
+│ Nguồn: <b>SoundCloud</b> 
+╰────────────────────⭓
+"""
     try:
         bot.delete_message(msg.chat.id, reply_id)
     except:
