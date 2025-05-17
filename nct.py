@@ -190,11 +190,11 @@ def handle_nct_selection(msg):
         return
     thumbnail_url = song.get("thumbnail")
     caption = f"""
-╭────────────────────⭓
+╭──────────────⭓
 │ Tên nhạc: <b>{song['title']}</b>
 │ Nghệ sĩ: {song['artist']}
 │ Nguồn: <b>NhacCuaTui</b> 
-╰────────────────────⭓
+╰──────────────⭓
 """
     thumbnail_url = song.get("thumbnail")
     if thumbnail_url:
