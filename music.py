@@ -15,7 +15,7 @@ from urllib.parse import urljoin
 import xml.etree.ElementTree as ET
 
 # --- CẤU HÌNH CHUNG ---
-token = "os.getenv("TELEGRAM_TOKEN")"  # <-- Token người dùng
+token = os.getenv("TELEGRAM_TOKEN")  # <-- Token người dùng
 bot = telebot.TeleBot(token)
 CONFIG_PATH = "config.json"
 
