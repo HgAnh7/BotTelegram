@@ -5,7 +5,7 @@ import random
 import requests
 
 bot_token = os.getenv("TELEGRAM_TOKEN") # Thay token bot vô đây
-emoji_list = [🇻🇳, 🐸]
+emoji_list = ['🇻🇳', '🐸']
 offset = 0  # Theo dõi tin nhắn đã xử lý
 
 def thaCamXuc(chat_id, message_id, emoji):
