@@ -178,7 +178,7 @@ def handle_soundcloud_selection(msg):
         return
     caption = f"""<blockquote>
 ⭔──────────────⭓
- Tên nhạc: <b>{track['title']}</b>
+ <b>{track['title']}</b>
  Nghệ sĩ: {track['user']['username']}
  Lượt nghe: {track['playback_count']:,} | Lượt thích: {track['likes_count']:,}
  Nguồn: <b>SoundCloud 🎶</b> 
