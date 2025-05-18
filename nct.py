@@ -189,13 +189,13 @@ def handle_nct_selection(msg):
         bot.reply_to(msg, '🚫 Không thể tải bài hát này.')
         return
     thumbnail_url = song.get("thumbnail")
-    caption = f"""
-╭──────────────⭓
-│ Tên nhạc: <b>{song['title']}</b>
-│ Nghệ sĩ: {song['artist']}
-│ Nguồn: <b>NhacCuaTui</b> 
-╰──────────────⭓
-"""
+    caption = f"""<blockquote>
+⭔───────────────⭓
+ <b>{song['title']}</b>
+ Nghệ sĩ: {song['artist']}
+ Nguồn: <b>NhacCuaTui</b> 
+⭓───────────────⭔
+</blockquote>"""
     thumbnail_url = song.get("thumbnail")
     if thumbnail_url:
         try:
