@@ -46,8 +46,8 @@ while True:
                         with open("log.txt", "a", encoding="utf-8") as f:
                             f.write(json.dumps(result, ensure_ascii=False) + "\n")
                     else:
-                        print(f"Bỏ qua tin nhắn từ nhóm không hợp lệ: {chat_id}")
-
+                        requests.post(f"https://api.telegram.org/bot{bot_token}/sendMessage", data={"chat_id": chat_id, "text": "Bot không thể sử dụng trong đoạn chat này!"})
+ 
         time.sleep(1)
 
     except Exception as e:
