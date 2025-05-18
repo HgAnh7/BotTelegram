@@ -176,14 +176,14 @@ def handle_soundcloud_selection(msg):
     if not audio_url or not thumbnail_url:
         bot.reply_to(msg, "🚫 Không tìm thấy nguồn audio hoặc thumbnail.", parse_mode='HTML')
         return
-    caption = f"""
-╭──────────────⭓
-│ Tên nhạc: <b>{track['title']}</b>
-│ Nghệ sĩ: {track['user']['username']}
-│ Lượt nghe: {track['playback_count']:,} | Lượt thích: {track['likes_count']:,}
-│ Nguồn: <b>SoundCloud</b> 
-╰──────────────⭓
-"""
+    caption = f"""<blockquote>
+⭔──────────────⭓
+ Tên nhạc: <b>{track['title']}</b>
+ Nghệ sĩ: {track['user']['username']}
+ Lượt nghe: {track['playback_count']:,} | Lượt thích: {track['likes_count']:,}
+ Nguồn: <b>SoundCloud 🎶</b> 
+⭓──────────────⭔
+</blockquote>"""
     try:
         bot.delete_message(msg.chat.id, reply_id)
     except:
