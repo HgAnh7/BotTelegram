@@ -1,3 +1,4 @@
+import io
 import os
 import re
 import json
@@ -188,10 +189,19 @@ def handle_soundcloud_selection(msg):
         bot.delete_message(msg.chat.id, reply_id)
     except:
         pass
-    bot.send_photo(msg.chat.id, thumbnail_url, caption=caption, parse_mode='HTML')
-    bot.send_audio(msg.chat.id, audio_url, title=track['title'], performer=track['user']['username'])
-    del scl_data[reply_id]
 
+    # Tải MP3 về buffer và đặt tên
+    resp = requests.get(audio_url, stream=True)
+    resp.raise_for_status()
+    audio_bytes = resp.content
+    audio_buffer = io.BytesIO(audio_bytes)
+    audio_buffer.name = f"{track['title']}.mp3"
+
+    bot.send_photo(msg.chat.id, thumbnail_url, caption=caption, parse_mode='HTML')
+    bot.send_audio(chat_id=msg.chat.id, audio=audio_buffer, title=track['title'], performer=track['user']['username'])
+
+    del scl_data[reply_id]
+    
 def main():
     print("Bot scl đang hoạt động...")
     bot.polling(none_stop=True)
