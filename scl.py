@@ -6,7 +6,7 @@ import random
 import telebot
 import requests
 
-soundcloud_data = {}
+scl_data = {}
 PLATFORM = "soundcloud"
 API_BASE = "https://api-v2.soundcloud.com"
 CONFIG_PATH = "config.json"
@@ -146,18 +146,18 @@ def soundcloud(message):
         response_text += f"🆔 ID: {track['id']}\n\n"
     response_text += "<b>💡 Trả lời tin nhắn này bằng số từ 1-10 để chọn bài hát!</b>"
     sent = bot.reply_to(message, response_text, parse_mode='HTML')
-    soundcloud_data[sent.message_id] = {
+    scl_data[sent.message_id] = {
         "user_id": message.from_user.id,
         "tracks": tracks
     }
 
-@bot.message_handler(func=lambda msg: msg.reply_to_message and msg.reply_to_message.message_id in soundcloud_data)
+@bot.message_handler(func=lambda msg: msg.reply_to_message and msg.reply_to_message.message_id in scl_data)
 def handle_soundcloud_selection(msg):
     reply_id = msg.reply_to_message.message_id
-    if reply_id not in soundcloud_data:
+    if reply_id not in scl_data:
         return
     user_id = msg.from_user.id
-    data = soundcloud_data[reply_id]
+    data = scl_data[reply_id]
     if user_id != data['user_id']:
         return
     text = msg.text.strip().lower()
@@ -190,7 +190,7 @@ def handle_soundcloud_selection(msg):
         pass
     bot.send_photo(msg.chat.id, thumbnail_url, caption=caption, parse_mode='HTML')
     bot.send_audio(msg.chat.id, audio_url, title=track['title'], performer=track['user']['username'])
-    del soundcloud_data[reply_id]
+    del scl_data[reply_id]
 
 def main():
     print("Bot scl đang hoạt động...")
