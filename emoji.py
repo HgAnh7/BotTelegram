@@ -4,9 +4,12 @@ import time
 import random
 import requests
 
-bot_token = os.getenv("TELEGRAM_TOKEN") # Thay token bot vô đây
-emoji_list = emoji_list = ['👍', '👎', '❤️', '🔥', '🥰', '👏', '😁', '🤔', '🤯', '😱', '🤬', '😢', '🎉', '🤩', '🤮', '💩', '🙏', '👌', '🕊️', '🤡', '🥱', '🥴', '😍', '🐳', '❤️‍🔥', '🌚', '🌭', '💯', '🤣', '⚡', '🍌', '🏆', '💔', '🤨', '😐', '🍓', '🍾', '💋', '🖕', '😈', '😴', '😭', '🤓', '👻', '👨‍💻', '👀', '🎃', '🙈', '😇', '😨', '🤝', '✍️', '🤗', '🫡', '🎅', '🎄', '☃️', '💅', '🤪', '🗿', '🆒', '💘', '🙉', '🦄', '😘', '💊', '🙊', '😎', '👾', '🤷‍♂️', '🤷', '🤷‍♀️', '😡']
+bot_token = os.getenv("TELEGRAM_TOKEN")  # Token bot
+emoji_list = ['👍', '👎', '❤️', '🔥', '🥰', '👏', '😁', '🤔', '🤯', '😱', '🤬', '😢', '🎉', '🤩', '🤮', '💩', '🙏', '👌', '🕊️', '🤡', '🥱', '🥴', '😍', '🐳', '❤️‍🔥', '🌚', '🌭', '💯', '🤣', '⚡', '🍌', '🏆', '💔', '🤨', '😐', '🍓', '🍾', '💋', '🖕', '😈', '😴', '😭', '🤓', '👻', '👨‍💻', '👀', '🎃', '🙈', '😇', '😨', '🤝', '✍️', '🤗', '🫡', '🎅', '🎄', '☃️', '💅', '🤪', '🗿', '🆒', '💘', '🙉', '🦄', '😘', '💊', '🙊', '😎', '👾', '🤷‍♂️', '🤷', '🤷‍♀️', '😡']
 offset = 0  # Theo dõi tin nhắn đã xử lý
+
+# 💡 Danh sách ID các group được phép
+allowed_chat_ids = [-1002408191237, 6379209139]
 
 def thaCamXuc(chat_id, message_id, emoji):
     url = f"https://api.telegram.org/bot{bot_token}/setMessageReaction"
@@ -20,7 +23,6 @@ def thaCamXuc(chat_id, message_id, emoji):
 
 while True:
     try:
-        # Lấy tin nhắn mới
         updates = requests.get(
             f"https://api.telegram.org/bot{bot_token}/getUpdates",
             params={"offset": offset, "timeout": 30}
@@ -28,20 +30,23 @@ while True:
 
         if "result" in updates:
             for update in updates["result"]:
-                offset = update["update_id"] + 1  # Cập nhật offset
+                offset = update["update_id"] + 1
                 
                 if "message" in update:
                     msg = update["message"]
                     chat_id = msg["chat"]["id"]
                     message_id = msg["message_id"]
-                    
-                    # Thả cảm xúc ngẫu nhiên
-                    random_emoji = random.choice(emoji_list)
-                    result = thaCamXuc(chat_id, message_id, random_emoji)
-                    
-                    print(f"Đã thả {random_emoji} vào tin nhắn {message_id}")
-                    with open("log.txt", "a", encoding="utf-8") as f:
-                        f.write(json.dumps(result, ensure_ascii=False) + "\n")
+
+                    # ➕ Chỉ xử lý nếu chat_id thuộc danh sách cho phép
+                    if chat_id in allowed_chat_ids:
+                        random_emoji = random.choice(emoji_list)
+                        result = thaCamXuc(chat_id, message_id, random_emoji)
+                        
+                        print(f"Đã thả {random_emoji} vào tin nhắn {message_id} trong nhóm {chat_id}")
+                        with open("log.txt", "a", encoding="utf-8") as f:
+                            f.write(json.dumps(result, ensure_ascii=False) + "\n")
+                    else:
+                        print(f"Bỏ qua tin nhắn từ nhóm không hợp lệ: {chat_id}")
 
         time.sleep(1)
 
