@@ -9,7 +9,7 @@ emoji_list = ['👍', '👎', '❤️', '🔥', '🥰', '👏', '😁', '🤔', 
 offset = 0  # Theo dõi tin nhắn đã xử lý
 
 # 💡 Danh sách ID các group được phép
-allowed_chat_ids = [-1002408191237, 6379209139]
+allowed_chat_ids = [-1002408191237, 6379209139, 5900948782, 7944440933, 7605936504]
 
 def thaCamXuc(chat_id, message_id, emoji):
     url = f"https://api.telegram.org/bot{bot_token}/setMessageReaction"
