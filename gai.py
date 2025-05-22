@@ -15,7 +15,8 @@ def handle_girl(message):
         bot.send_video(
             chat_id=message.chat.id,
             video=video_url,
-            reply_to_message_id=message.message_id
+            reply_to_message_id=message.message_id,
+            timeout=20
         )
     except telebot.apihelper.ApiTelegramException as e:
         bot.reply_to(message, f"Link video bị lỗi (cần xóa khỏi API): {video_url}")
