@@ -17,11 +17,10 @@ def handle_girl(message):
             video=video_url,
             reply_to_message_id=message.message_id
         )
+    except telebot.apihelper.ApiTelegramException as e:
+        bot.reply_to(message, f"Link video bị lỗi (cần xóa khỏi API): {video_url}")
     except Exception as e:
-        bot.reply_to(
-            message,
-            f"Link lỗi: {video_url}"
-        )
+        bot.reply_to(message, f"Link video bị lỗi (cần xóa khỏi API): {video_url}")
 
 # Khởi chạy bot
 print("Bot random video gái đang chạy...")
