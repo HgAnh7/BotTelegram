@@ -9,7 +9,7 @@ bot = telebot.TeleBot(TOKEN)
 def handle_sex(message):
     try:
         # Lấy video URL
-        api_url = "https://api-l8y6.onrender.com/api/random-video"
+        api_url = "https://api-hganh7.onrender.com/api/sex"
         response = requests.get(api_url, timeout=10).json()
         video_url = response['video_url']
         
