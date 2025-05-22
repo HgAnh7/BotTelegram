@@ -12,18 +12,18 @@ def handle_girl(message):
         response = requests.get(api_url, timeout=10).json()
         video_url = response['video_url']
         
-        try:
-            bot.send_video(
-                chat_id=message.chat.id,
-                video=video_url,
-                reply_to_message_id=message.message_id,
-                timeout=20
-            )
-        except:
-            bot.reply_to(message, f"Link video bị lỗi (cần xóa khỏi API): {video_url}")
+        bot.send_video(
+            chat_id=message.chat.id,
+            video=video_url,
+            reply_to_message_id=message.message_id,
+            timeout=20
+        )
             
-    except:  # Bắt mọi lỗi từ API
-        bot.reply_to(message, "❌ Lỗi khi lấy video từ API!")
+    except:
+        if 'video_url' in locals():
+            bot.reply_to(message, f"Link lỗi: {video_url}")
+        else:
+            bot.reply_to(message, "Lỗi API!")
 
 # Khởi chạy bot
 print("Bot random video gái đang chạy...")
