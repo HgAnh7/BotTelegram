@@ -9,7 +9,7 @@ bot = telebot.TeleBot(TOKEN)
 def handle_anime(message):
     try:
         # Lấy video URL
-        api_url = "https://api-anime-0rz7.onrender.com/api/girl"
+        api_url = "https://api-anime-0rz7.onrender.com/api/anime"
         response = requests.get(api_url, timeout=10).json()
         video_url = response['video_url']
         
