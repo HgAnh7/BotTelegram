@@ -26,7 +26,7 @@ def fetch_and_send_video(message, api_url):
 # Xử lý lệnh /anime
 @bot.message_handler(commands=['anime'])
 def handle_anime(message):
-    fetch_and_send_video(message, "https://api-anime-0rz7.onrender.com/api/girl")
+    fetch_and_send_video(message, "https://api-anime-0rz7.onrender.com/api/anime")
 
 # Xử lý lệnh /girl
 @bot.message_handler(commands=['girl'])
