@@ -39,7 +39,6 @@ def get_headers():
 
 def get_client_id():
     try:
-        import os
         config = {}
         if os.path.exists(CONFIG_PATH):
             with open(CONFIG_PATH, 'r') as f:
