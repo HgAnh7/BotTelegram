@@ -8,7 +8,7 @@ bot = telebot.TeleBot(TOKEN)
 # Hàm dùng chung để xử lý API và gửi video
 def fetch_and_send_video(message, api_url):
     try:
-        response = requests.get(api_url, timeout=10).json()
+        response = requests.get(api_url, timeout=20).json()
         video_url = response['video_url']
         
         try:
