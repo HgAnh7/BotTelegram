@@ -13,7 +13,7 @@ def fetch_and_send_video(message, api_url):
     except:
         time.sleep(5)  # đợi 3 giây và thử lại
         try:
-            response = requests.get(api_url, timeout=85).json()
+            response = requests.get(api_url, timeout=5).json()
         except Exception as e:
             bot.reply_to(message, "Lỗi API (sau khi thử lại)!")
             return
