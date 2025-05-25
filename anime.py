@@ -30,5 +30,5 @@ def handle_anime(message):
         bot.reply_to(message, "Lỗi API!")
 
 # Khởi chạy bot
-print("Bot random video gái đang chạy...")
+print("Bot random video anime đang chạy...")
 bot.infinity_polling()
