@@ -16,7 +16,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Thay thế bằng token bot của bạn
-BOT_TOKEN = "7757320016:AAEyc-YORyiR2aPz4UTrz7LHNHveSq9NgZw"
+BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 class URLCollector:
     def __init__(self):
