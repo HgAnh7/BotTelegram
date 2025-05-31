@@ -4,9 +4,4 @@ telebot
 requests
 beautifulsoup4
 pyTelegramBotAPI
-python-telegram-bot 
-
-
-
-
-threading
+python-telegram-bot
