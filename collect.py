@@ -1,313 +1,396 @@
-import asyncio
-import aiohttp
+import requests
 import json
 import os
-import tempfile
+import time
 from datetime import datetime
-from typing import Optional, Set, Tuple
-from urllib.parse import urlparse
-
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
+import logging
+import threading
 
-# Config
-BOT_TOKEN = "7757320016:AAEyc-YORyiR2aPz4UTrz7LHNHveSq9NgZw"
-MAX_REQUESTS = 50
-TIMEOUT = 10
-DELAY = 0.5
+# Cấu hình logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# Thay thế bằng token bot của bạn
+BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 class URLCollector:
     def __init__(self):
-        self.urls: Set[str] = set()
-        self.collecting = False
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.collected_urls = set()  # Sử dụng set để tránh trùng lặp
+        self.is_collecting = False
     
-    async def get_session(self):
-        if not self.session or self.session.closed:
-            self.session = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=TIMEOUT),
-                headers={'User-Agent': 'Mozilla/5.0 (compatible; URLBot/1.0)'}
-            )
-        return self.session
-    
-    async def close(self):
-        if self.session and not self.session.closed:
-            await self.session.close()
-    
-    def is_valid_url(self, url: str) -> bool:
+    def fetch_url_from_api(self, api_url, url_key="url", timeout=10):
+        """
+        Gọi API và lấy URL từ JSON response
+        
+        Args:
+            api_url: URL của API cần gọi
+            url_key: Key chứa URL trong JSON response (mặc định là "url")
+            timeout: Timeout cho request (giây)
+        
+        Returns:
+            URL nếu tìm thấy, None nếu không
+        """
         try:
-            result = urlparse(url)
-            return bool(result.scheme and result.netloc)
-        except:
-            return False
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            
+            response = requests.get(api_url, headers=headers, timeout=timeout)
+            
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    url = self.extract_url_from_json(data, url_key)
+                    return url
+                except json.JSONDecodeError:
+                    logger.error("Response không phải JSON hợp lệ")
+                    return None
+            else:
+                logger.warning(f"API trả về status code: {response.status_code}")
+                return None
+                
+        except requests.exceptions.Timeout:
+            logger.error("Request timeout")
+            return None
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Lỗi khi gọi API: {e}")
+            return None
     
-    def extract_url(self, data, key: str) -> Optional[str]:
+    def extract_url_from_json(self, data, url_key):
+        """
+        Trích xuất URL từ JSON data (hỗ trợ nested)
+        
+        Args:
+            data: JSON data
+            url_key: Key cần tìm
+            
+        Returns:
+            URL nếu tìm thấy, None nếu không
+        """
         if isinstance(data, dict):
-            if key in data and isinstance(data[key], str):
-                return data[key]
+            if url_key in data:
+                return data[url_key]
+            
+            # Tìm trong nested objects
             for value in data.values():
                 if isinstance(value, (dict, list)):
-                    result = self.extract_url(value, key)
+                    result = self.extract_url_from_json(value, url_key)
                     if result:
                         return result
+                        
         elif isinstance(data, list):
             for item in data:
-                result = self.extract_url(item, key)
+                result = self.extract_url_from_json(item, url_key)
                 if result:
                     return result
+        
         return None
     
-    async def fetch_url(self, api_url: str, key: str) -> Optional[str]:
-        try:
-            session = await self.get_session()
-            async with session.get(api_url) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    url = self.extract_url(data, key)
-                    return url if url and self.is_valid_url(url) else None
-        except:
-            pass
-        return None
+    def collect_urls(self, api_url, num_requests, url_key="url", progress_callback=None):
+        """
+        Thu thập URLs từ API
+        
+        Args:
+            api_url: URL của API
+            num_requests: Số lần request
+            url_key: Key chứa URL trong JSON
+            progress_callback: Callback để cập nhật tiến trình
+        """
+        self.is_collecting = True
+        new_urls_count = 0
+        duplicate_count = 0
+        error_count = 0
+        
+        for i in range(num_requests):
+            if not self.is_collecting:  # Cho phép dừng giữa chừng
+                break
+                
+            url = self.fetch_url_from_api(api_url, url_key)
+            
+            if url:
+                if url not in self.collected_urls:
+                    self.collected_urls.add(url)
+                    new_urls_count += 1
+                    logger.info(f"Thêm URL mới: {url}")
+                else:
+                    duplicate_count += 1
+                    logger.info(f"URL trùng lặp bỏ qua: {url}")
+            else:
+                error_count += 1
+            
+            # Callback để cập nhật tiến trình
+            if progress_callback:
+                progress_callback(i + 1, num_requests, new_urls_count, duplicate_count, error_count)
+            
+            # Delay nhỏ để tránh spam API
+            time.sleep(0.5)
+        
+        self.is_collecting = False
+        return new_urls_count, duplicate_count, error_count
     
-    async def collect(self, api_url: str, count: int, key: str, callback=None) -> Tuple[int, int]:
-        if not self.is_valid_url(api_url) or not (1 <= count <= MAX_REQUESTS):
-            raise ValueError("Invalid API URL or count")
-        
-        self.collecting = True
-        new_count = duplicate_count = 0
-        
-        try:
-            for i in range(count):
-                if not self.collecting:
-                    break
-                
-                url = await self.fetch_url(api_url, key)
-                if url:
-                    if url not in self.urls:
-                        self.urls.add(url)
-                        new_count += 1
-                    else:
-                        duplicate_count += 1
-                
-                if callback and (i + 1) % 5 == 0:
-                    callback(i + 1, count, new_count, duplicate_count)
-                
-                await asyncio.sleep(DELAY)
-        finally:
-            self.collecting = False
-        
-        return new_count, duplicate_count
-    
-    async def save_file(self) -> Optional[str]:
-        if not self.urls:
-            return None
-        
-        fd, filename = tempfile.mkstemp(suffix='.txt', prefix='urls_')
-        os.close(fd)
-        
+    def save_urls_to_file(self, filename="urls.txt"):
+        """Lưu URLs vào file"""
         try:
             with open(filename, 'w', encoding='utf-8') as f:
-                f.write(f"# URLs collected: {len(self.urls)}\n")
-                f.write(f"# Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-                for i, url in enumerate(sorted(self.urls), 1):
-                    f.write(f"{i}. {url}\n")
+                f.write(f"# URLs được thu thập vào {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"# Tổng cộng: {len(self.collected_urls)} URLs\n\n")
+                
+                for url in sorted(self.collected_urls):
+                    f.write(f"{url}\n")
+            
             return filename
-        except:
-            if os.path.exists(filename):
-                os.remove(filename)
+        except Exception as e:
+            logger.error(f"Lỗi khi lưu file: {e}")
             return None
     
-    def stop(self):
-        self.collecting = False
+    def clear_urls(self):
+        """Xóa tất cả URLs đã thu thập"""
+        self.collected_urls.clear()
     
-    def clear(self) -> int:
-        count = len(self.urls)
-        self.urls.clear()
-        return count
+    def stop_collecting(self):
+        """Dừng quá trình thu thập"""
+        self.is_collecting = False
 
-# Global collector
+# Khởi tạo collector
 collector = URLCollector()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🤖 *URL Collector Bot*\n\n"
-        "Commands:\n"
-        "• `/collect <api_url> <count> [key]` - Collect URLs\n"
-        "• `/status` - Show statistics\n"
-        "• `/download` - Get file\n"
-        "• `/clear` - Clear URLs\n"
-        "• `/stop` - Stop collection\n\n"
-        f"Max requests: {MAX_REQUESTS}",
-        parse_mode='Markdown'
-    )
+    """Lệnh /start"""
+    welcome_message = """
+🤖 *Bot Thu Thập URLs*
 
-async def collect_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+Các lệnh có sẵn:
+• `/collect <api_url> <số_lần> [url_key]` - Thu thập URLs từ API
+• `/status` - Xem trạng thái hiện tại
+• `/download` - Tải file urls.txt
+• `/clear` - Xóa tất cả URLs đã thu thập
+• `/stop` - Dừng quá trình thu thập
+• `/help` - Xem hướng dẫn chi tiết
+
+*Ví dụ:*
+`/collect https://api.example.com/data 10 url`
+    """
+    await update.message.reply_text(welcome_message, parse_mode='Markdown')
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lệnh /help"""
+    help_text = """
+📖 *Hướng Dẫn Sử Dụng*
+
+*Lệnh collect:*
+`/collect <api_url> <số_lần> [url_key]`
+
+• `api_url`: URL của API cần gọi
+• `số_lần`: Số lần request API (1-100)
+• `url_key`: Key chứa URL trong JSON (mặc định: "url")
+
+*Ví dụ:*
+• `/collect https://picsum.photos/200/300 20`
+• `/collect https://api.example.com/data 50 download_url`
+• `/collect https://randomuser.me/api 10 picture`
+
+*Các API test có thể dùng:*
+• `https://jsonplaceholder.typicode.com/posts/1` - key: url
+• `https://httpbin.org/json` - key: url
+• `https://api.github.com/repos/microsoft/vscode` - key: clone_url
+
+*Lưu ý:*
+• Bot sẽ tự động loại bỏ URLs trùng lặp
+• File sẽ được lưu với tên `urls.txt`
+• Tối đa 100 requests mỗi lần
+• Sử dụng `/stop` để dừng giữa chừng
+    """
+    await update.message.reply_text(help_text, parse_mode='Markdown')
+
+async def collect_urls_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lệnh /collect"""
     if len(context.args) < 2:
-        await update.message.reply_text("Usage: `/collect <api_url> <count> [key]`", parse_mode='Markdown')
+        await update.message.reply_text(
+            "❌ Sử dụng: `/collect <api_url> <số_lần> [url_key]`",
+            parse_mode='Markdown'
+        )
         return
     
-    if collector.collecting:
-        await update.message.reply_text("⚠️ Already collecting. Use `/stop` first.")
+    if collector.is_collecting:
+        await update.message.reply_text("⚠️ Bot đang thu thập URLs. Dùng `/stop` để dừng trước.")
         return
     
     try:
         api_url = context.args[0]
-        count = int(context.args[1])
-        key = context.args[2] if len(context.args) > 2 else "url"
+        num_requests = int(context.args[1])
+        url_key = context.args[2] if len(context.args) > 2 else "url"
         
-        progress_msg = await update.message.reply_text("🚀 Starting collection...")
+        if num_requests < 1 or num_requests > 100:
+            await update.message.reply_text("❌ Số lần request phải từ 1-100")
+            return
         
-        async def update_progress(current, total, new, duplicates):
-            percent = (current / total) * 100
-            text = f"📊 Progress: {current}/{total} ({percent:.0f}%)\n"
-            text += f"✅ New: {new} | 🔄 Duplicates: {duplicates}"
+        # Gửi thông báo bắt đầu
+        progress_msg = await update.message.reply_text("🚀 Bắt đầu thu thập URLs...")
+        
+        # Hàm cập nhật tiến trình đơn giản hơn
+        def update_progress(current, total, new_count, duplicate_count, error_count):
+            if current % 5 == 0 or current == total:  # Cập nhật mỗi 5 lần
+                progress_text = f"📊 Tiến trình: {current}/{total}\n"
+                progress_text += f"✅ URLs mới: {new_count}\n"
+                progress_text += f"🔄 Trùng lặp: {duplicate_count}\n"
+                progress_text += f"❌ Lỗi: {error_count}"
+                
+                # Lưu để cập nhật sau (tránh async trong sync function)
+                update_progress.last_text = progress_text
+        
+        update_progress.last_text = "🚀 Bắt đầu thu thập URLs..."
+        
+        # Thu thập URLs trực tiếp (không dùng thread để tránh lỗi event loop)
+        new_count, duplicate_count, error_count = collector.collect_urls(api_url, num_requests, url_key, update_progress)
+        
+        # Tạo và gửi file ngay lập tức
+        if collector.collected_urls:
             try:
-                await progress_msg.edit_text(text)
-            except:
-                pass
-        
-        new_count, duplicate_count = await collector.collect(api_url, count, key, update_progress)
-        
-        if collector.urls:
-            filename = await collector.save_file()
-            if filename:
-                caption = f"✅ Collection complete!\n\n"
-                caption += f"📊 New URLs: {new_count}\n"
-                caption += f"🔄 Duplicates: {duplicate_count}\n"
-                caption += f"📈 Total: {len(collector.urls)}"
+                filename = collector.save_urls_to_file()
+                if filename and os.path.exists(filename):
+                    # Tạo caption với thống kê
+                    caption = f"✅ *Thu thập hoàn thành!*\n\n"
+                    caption += f"📊 Kết quả:\n"
+                    caption += f"• URLs mới: {new_count}\n"
+                    caption += f"• Trùng lặp: {duplicate_count}\n"
+                    caption += f"• Lỗi: {error_count}\n"
+                    caption += f"• Tổng URLs: {len(collector.collected_urls)}"
+                    
+                    # Gửi file với caption
+                    with open(filename, 'rb') as f:
+                        await update.message.reply_document(
+                            document=f,
+                            filename="urls.txt",
+                            caption=caption,
+                            parse_mode='Markdown'
+                        )
+                    
+                    # Xóa file tạm
+                    os.remove(filename)
+                    
+                    # Xóa message tiến trình
+                    await progress_msg.delete()
+                    
+                else:
+                    # Nếu không tạo được file, hiển thị kết quả text
+                    result_text = f"✅ *Hoàn thành!*\n\n"
+                    result_text += f"📊 Kết quả:\n"
+                    result_text += f"• URLs mới: {new_count}\n"
+                    result_text += f"• Trùng lặp: {duplicate_count}\n"
+                    result_text += f"• Lỗi: {error_count}\n"
+                    result_text += f"• Tổng URLs: {len(collector.collected_urls)}\n\n"
+                    result_text += f"❌ Lỗi tạo file, dùng `/download` để thử lại"
+                    
+                    await progress_msg.edit_text(result_text, parse_mode='Markdown')
+                    
+            except Exception as file_error:
+                # Nếu có lỗi khi gửi file
+                result_text = f"✅ *Thu thập hoàn thành!*\n\n"
+                result_text += f"📊 Kết quả:\n"
+                result_text += f"• URLs mới: {new_count}\n"
+                result_text += f"• Trùng lặp: {duplicate_count}\n"
+                result_text += f"• Lỗi: {error_count}\n"
+                result_text += f"• Tổng URLs: {len(collector.collected_urls)}\n\n"
+                result_text += f"❌ Lỗi gửi file: {str(file_error)}\n"
+                result_text += f"Dùng `/download` để tải file"
                 
-                with open(filename, 'rb') as f:
-                    await update.message.reply_document(
-                        document=f,
-                        filename=f"urls_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                        caption=caption
-                    )
-                
-                os.remove(filename)
-                await progress_msg.delete()
-            else:
-                await progress_msg.edit_text("✅ Complete but failed to create file. Use `/download`")
+                await progress_msg.edit_text(result_text, parse_mode='Markdown')
         else:
-            await progress_msg.edit_text("⚠️ No URLs found. Check API and key name.")
-    
+            # Nếu không có URLs nào
+            result_text = f"⚠️ *Hoàn thành nhưng không có URLs!*\n\n"
+            result_text += f"📊 Kết quả:\n"
+            result_text += f"• URLs mới: {new_count}\n"
+            result_text += f"• Trùng lặp: {duplicate_count}\n"
+            result_text += f"• Lỗi: {error_count}\n\n"
+            result_text += f"Kiểm tra lại API URL và key name"
+            
+            await progress_msg.edit_text(result_text, parse_mode='Markdown')
+        
     except ValueError:
-        await update.message.reply_text("❌ Invalid count or API URL")
+        await update.message.reply_text("❌ Số lần request phải là số nguyên")
     except Exception as e:
-        await update.message.reply_text(f"❌ Error: {str(e)}")
+        await update.message.reply_text(f"❌ Lỗi: {str(e)}")
 
-async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = f"📊 *Status*\n\n"
-    text += f"• Total URLs: {len(collector.urls)}\n"
-    text += f"• Collecting: {'Yes' if collector.collecting else 'No'}\n"
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lệnh /status"""
+    status_text = f"📊 *Trạng Thái*\n\n"
+    status_text += f"• Tổng URLs: {len(collector.collected_urls)}\n"
+    status_text += f"• Đang thu thập: {'✅' if collector.is_collecting else '❌'}\n"
     
-    if collector.urls:
-        recent = list(collector.urls)[-3:]
-        text += f"\n*Recent URLs:*\n"
-        for i, url in enumerate(recent, 1):
-            text += f"{i}. `{url[:50]}...`\n"
+    if collector.collected_urls:
+        recent_urls = list(collector.collected_urls)[-3:]  # 3 URLs gần nhất
+        status_text += f"\n*URLs gần nhất:*\n"
+        for i, url in enumerate(recent_urls, 1):
+            status_text += f"{i}. `{url[:50]}...`\n"
     
-    await update.message.reply_text(text, parse_mode='Markdown')
+    await update.message.reply_text(status_text, parse_mode='Markdown')
 
-async def download_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not collector.urls:
-        await update.message.reply_text("❌ No URLs collected")
+async def download_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lệnh /download"""
+    if not collector.collected_urls:
+        await update.message.reply_text("❌ Chưa có URLs nào được thu thập")
         return
     
-    filename = await collector.save_file()
-    if filename:
-        with open(filename, 'rb') as f:
-            await update.message.reply_document(
-                document=f,
-                filename=f"urls_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                caption=f"📁 {len(collector.urls)} URLs"
-            )
-        os.remove(filename)
-    else:
-        await update.message.reply_text("❌ Failed to create file")
+    try:
+        filename = collector.save_urls_to_file()
+        if filename and os.path.exists(filename):
+            with open(filename, 'rb') as f:
+                await update.message.reply_document(
+                    document=f,
+                    filename=filename,
+                    caption=f"📁 File chứa {len(collector.collected_urls)} URLs"
+                )
+            
+            # Xóa file tạm sau khi gửi
+            os.remove(filename)
+        else:
+            await update.message.reply_text("❌ Lỗi khi tạo file")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Lỗi: {str(e)}")
 
-async def clear_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    count = collector.clear()
-    await update.message.reply_text(f"🗑️ Cleared {count} URLs")
+async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lệnh /clear"""
+    count = len(collector.collected_urls)
+    collector.clear_urls()
+    await update.message.reply_text(f"🗑️ Đã xóa {count} URLs")
 
-async def stop_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if collector.collecting:
-        collector.stop()
-        await update.message.reply_text("⏹️ Collection stopped")
+async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lệnh /stop"""
+    if collector.is_collecting:
+        collector.stop_collecting()
+        await update.message.reply_text("⏹️ Đã dừng quá trình thu thập URLs")
     else:
-        await update.message.reply_text("❌ Not collecting")
+        await update.message.reply_text("❌ Không có quá trình thu thập nào đang chạy")
 
 def main():
-    if not BOT_TOKEN or BOT_TOKEN.startswith("YOUR_BOT"):
-        print("❌ Set BOT_TOKEN environment variable")
+    """Hàm main"""
+    if BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
+        print("❌ Vui lòng thay thế BOT_TOKEN bằng token thực từ @BotFather")
         return
     
-    app = Application.builder().token(BOT_TOKEN).build()
+    # Tạo application
+    application = Application.builder().token(BOT_TOKEN).build()
     
-    # Add handlers
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("collect", collect_cmd))
-    app.add_handler(CommandHandler("status", status_cmd))
-    app.add_handler(CommandHandler("download", download_cmd))
-    app.add_handler(CommandHandler("clear", clear_cmd))
-    app.add_handler(CommandHandler("stop", stop_cmd))
+    # Thêm handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("collect", collect_urls_command))
+    application.add_handler(CommandHandler("status", status_command))
+    application.add_handler(CommandHandler("download", download_command))
+    application.add_handler(CommandHandler("clear", clear_command))
+    application.add_handler(CommandHandler("stop", stop_command))
     
-    print("🤖 Bot starting...")
-    
-    try:
-        # Use run_polling with close_loop=False to avoid event loop conflicts
-        app.run_polling(drop_pending_updates=True, close_loop=False)
-    except KeyboardInterrupt:
-        print("\n👋 Bot stopped")
-    finally:
-        # Properly close the collector session
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            loop.create_task(collector.close())
-        else:
-            asyncio.run(collector.close())
+    # Chạy bot
+    print("🤖 Bot đang chạy...")
+    application.run_polling()
 
 if __name__ == '__main__':
-    # Check if we're in an environment with an existing event loop
     try:
-        # Try to get the current event loop
-        loop = asyncio.get_running_loop()
-        print("⚠️ Detected existing event loop. Using alternative approach...")
-        
-        # If we're here, there's already a running loop
-        # We need to run the bot differently
-        import nest_asyncio
-        nest_asyncio.apply()
-        
-        async def run_bot():
-            if not BOT_TOKEN or BOT_TOKEN.startswith("YOUR_BOT"):
-                print("❌ Set BOT_TOKEN environment variable")
-                return
-            
-            app = Application.builder().token(BOT_TOKEN).build()
-            
-            # Add handlers
-            app.add_handler(CommandHandler("start", start))
-            app.add_handler(CommandHandler("collect", collect_cmd))
-            app.add_handler(CommandHandler("status", status_cmd))
-            app.add_handler(CommandHandler("download", download_cmd))
-            app.add_handler(CommandHandler("clear", clear_cmd))
-            app.add_handler(CommandHandler("stop", stop_cmd))
-            
-            print("🤖 Bot starting...")
-            
-            try:
-                await app.run_polling(drop_pending_updates=True)
-            finally:
-                await collector.close()
-        
-        # Run the bot using the existing event loop
-        asyncio.create_task(run_bot())
-        
-    except RuntimeError:
-        # No existing event loop, we can use the normal approach
         main()
-    except ImportError:
-        print("❌ nest_asyncio not found. Install it with: pip install nest-asyncio")
-        print("Or run the bot in a fresh Python session without existing event loops")
-        # Fall back to normal approach
-        main()
+    except KeyboardInterrupt:
+        print("\n👋 Bot đã dừng")
