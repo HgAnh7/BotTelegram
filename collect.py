@@ -16,7 +16,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Thay thế bằng token bot của bạn
-BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
+BOT_TOKEN = "7757320016:AAEyc-YORyiR2aPz4UTrz7LHNHveSq9NgZw"
 
 class URLCollector:
     def __init__(self):
@@ -186,7 +186,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 `/collect <api_url> <số_lần> [url_key]`
 
 • `api_url`: URL của API cần gọi
-• `số_lần`: Số lần request API (1-100)
+• `số_lần`: Số lần request API (1-1000)
 • `url_key`: Key chứa URL trong JSON (mặc định: "url")
 
 *Ví dụ:*
@@ -202,7 +202,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Lưu ý:*
 • Bot sẽ tự động loại bỏ URLs trùng lặp
 • File sẽ được lưu với tên `urls.txt`
-• Tối đa 100 requests mỗi lần
+• Tối đa 1000 requests mỗi lần
 • Sử dụng `/stop` để dừng giữa chừng
     """
     await update.message.reply_text(help_text, parse_mode='Markdown')
@@ -225,8 +225,8 @@ async def collect_urls_command(update: Update, context: ContextTypes.DEFAULT_TYP
         num_requests = int(context.args[1])
         url_key = context.args[2] if len(context.args) > 2 else "url"
         
-        if num_requests < 1 or num_requests > 100:
-            await update.message.reply_text("❌ Số lần request phải từ 1-100")
+        if num_requests < 1 or num_requests > 1000:
+            await update.message.reply_text("❌ Số lần request phải từ 1-1000")
             return
         
         # Gửi thông báo bắt đầu
