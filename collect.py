@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
-MAX_URLS = 10_000
+MAX_URLS = 10_000  # Giới hạn nội bộ, không hiển thị cho người dùng
 
 class URLCollector:
     def __init__(self):
@@ -59,7 +59,7 @@ class URLCollector:
                     data = await response.json()
                     return self.extract_url_from_json(data, url_key)
         except Exception as e:
-            logger.debug(f"Fetch error: {e}")
+            logger.debug(f"Lỗi khi lấy URL: {e}")
         return None
 
     async def collect_urls(self, chat_id: int, api_url: str, request_count: int,
@@ -75,17 +75,10 @@ class URLCollector:
                 break
 
             end = min(start + batch_size, request_count)
-            tasks = [
-                self.fetch_single_url(api_url, url_key)
-                for _ in range(end - start)
-            ]
+            tasks = [self.fetch_single_url(api_url, url_key) for _ in range(end - start)]
 
             try:
-                results = await asyncio.wait_for(
-                    asyncio.gather(*tasks, return_exceptions=True),
-                    timeout=30.0
-                )
-
+                results = await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=30.0)
                 for result in results:
                     if isinstance(result, Exception):
                         err_count += 1
@@ -104,7 +97,7 @@ class URLCollector:
                 if progress_callback:
                     await progress_callback(end, request_count, new_count, dup_count, err_count)
 
-                await asyncio.sleep(0.05)  # small delay to reduce pressure
+                await asyncio.sleep(0.05)
 
             except asyncio.TimeoutError:
                 err_count += end - start
@@ -118,42 +111,41 @@ class URLCollector:
     def save_urls_to_file(self, filename: str = None, chat_id: int = None) -> Optional[str]:
         if not filename:
             filename = self.generate_filename(chat_id)
-
         try:
             with open(filename, 'w', encoding='utf-8') as f:
-                f.write(f"# Collected URLs at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write(f"# Total: {len(self.collected_urls)} URLs\n\n")
+                f.write(f"# Danh sách URL thu thập được tại {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"# Tổng cộng: {len(self.collected_urls)} URL\n\n")
                 for url in sorted(self.collected_urls):
                     f.write(f"{url}\n")
             return filename
         except Exception as e:
-            logger.error(f"File save error: {e}")
+            logger.error(f"Lỗi lưu tệp: {e}")
             return None
-
 
 collector = URLCollector()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 *Optimized URL Collector Bot*\n\n"
-        "Commands:\n"
-        "• `/collect <api_url> <count> [url_key]` - Start collecting URLs\n"
-        "• `/status` - Show bot status\n"
-        "• `/download` - Download collected URLs\n"
-        "• `/stop` - Stop collecting\n"
-        "• `/clear` - Clear stored URLs\n\n"
-        "*Example:* `/collect https://picsum.photos/200/300 100`",
+        "🤖 *Bot Thu Thập URL*
+\n\n"
+        "Lệnh có thể sử dụng:\n"
+        "• /collect <api_url> <số_lượng> [tên_trường_url] - Bắt đầu thu thập URL\n"
+        "• /status - Xem trạng thái bot\n"
+        "• /downlad - Tả danh sách URL đã thu thập\n"
+        "• /stp - Dng quá trình thu thập\n"
+        "• /cear  Xóa toàn bộ URL đã lưu\n\n"
+        "*Ví dụ:* `/collect https://picsum.photos/200/300 100`",
         parse_mode='Markdown'
     )
 
 async def collect(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 2:
-        await update.message.reply_text("❌ Usage: `/collect <api_url> <count> [url_key]`", parse_mode='Markdown')
+        await update.message.reply_text("❌ Cú pháp: `/collect <api_url> <số_lượng> [tên_trường_url]`", parse_mode='Markdown')
         return
 
     chat_id = update.effective_chat.id
     if chat_id in collector.collection_tasks:
-        await update.message.reply_text("⚠️ Already collecting. Use `/stop` to cancel.")
+        await update.message.reply_text("⚠️ Đang thu thập. Dùng lệnh `/stop` để dừng.")
         return
 
     try:
@@ -161,21 +153,21 @@ async def collect(update: Update, context: ContextTypes.DEFAULT_TYPE):
         request_count = int(context.args[1])
         url_key = context.args[2] if len(context.args) > 2 else "url"
 
-        if not (1 <= request_count <= 1000):
-            await update.message.reply_text("❌ Count must be between 1–1000")
+        if not (1 <= request_count <= 10_000):
+            await update.message.reply_text("❌ Số lượng URL phải nằm trong khoảng 1–10.000")
             return
 
         start_time = time.time()
-        status_msg = await update.message.reply_text("🚀 Starting collection...")
+        status_msg = await update.message.reply_text("🚀 Bắt đầu thu thập...")
 
         async def update_progress(current, total, new, dup, err):
             elapsed = time.time() - start_time
             speed = current / elapsed if elapsed else 0
             text = (
-                f"📊 Progress: {current}/{total} ({current / total * 100:.1f}%)\n"
-                f"⚡ Speed: {speed:.1f} req/s\n"
-                f"✅ New: {new} | 🔄 Duplicates: {dup} | ❌ Errors: {err}\n"
-                f"🧱 Total stored: {len(collector.collected_urls)} / {MAX_URLS}"
+                f"⏳ Đã xử lý: {current}/{total} ({current / total * 100:.1f}%)\n"
+                f"⚡ Tốc độ: {speed:.1f} yêu cầu/giây\n"
+                f"✅ Mới: {new} | 🔁 Trùng: {dup} | ❌ Lỗi: {err}\n"
+                f"📦 Tổng URL đã lưu: {len(collector.collected_urls)}"
             )
             try:
                 await status_msg.edit_text(text)
@@ -194,12 +186,12 @@ async def collect(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if filename:
                 total_time = time.time() - start_time
                 caption = (
-                    f"✅ *Collection Complete!*\n\n"
-                    f"• New: {new}\n"
-                    f"• Duplicate: {dup}\n"
-                    f"• Error: {err}\n"
-                    f"• Total: {len(collector.collected_urls)}\n"
-                    f"• Time: {total_time:.1f}s"
+                    f"✅ *Thu thập hoàn tất!*\n\n"
+                    f"• Mới: {new}\n"
+                    f"• Trùng: {dup}\n"
+                    f"• Lỗi: {err}\n"
+                    f"• Tổng: {len(collector.collected_urls)} URL\n"
+                    f"• Thời gian: {total_time:.1f} giây"
                 )
                 with open(filename, 'rb') as f:
                     await update.message.reply_document(
@@ -211,14 +203,14 @@ async def collect(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 os.remove(filename)
                 await status_msg.delete()
             else:
-                await status_msg.edit_text("✅ Completed! (File save error)")
+                await status_msg.edit_text("✅ Hoàn tất! (Lỗi khi lưu tệp)")
         else:
-            await status_msg.edit_text("⚠️ No URLs collected. Check API or URL key.")
+            await status_msg.edit_text("⚠️ Không thu thập được URL nào. Hãy kiểm tra API hoặc tên trường URL.")
 
     except asyncio.CancelledError:
-        await update.message.reply_text("⏹️ Collection stopped")
+        await update.message.reply_text("⏹️ Đã dừng thu thập")
     except Exception as e:
-        await update.message.reply_text(f"❌ Error: {str(e)}")
+        await update.message.reply_text(f"❌ Lỗi: {str(e)}")
     finally:
         collector.collection_tasks.pop(chat_id, None)
 
@@ -227,15 +219,15 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_collecting = chat_id in collector.collection_tasks
 
     text = (
-        f"📊 *Bot Status*\n\n"
-        f"• Total URLs: {len(collector.collected_urls)} / {MAX_URLS}\n"
-        f"• Collecting: {'🟢 Yes' if is_collecting else '🔴 No'}\n"
-        f"• Active Tasks: {len(collector.collection_tasks)}"
+        f"📊 *Trạng thái bot*\n\n"
+        f"• URL đã lưu: {len(collector.collected_urls)}\n"
+        f"• Đang thu thập: {'🟢 Có' if is_collecting else '🔴 Không'}\n"
+        f"• Số tiến trình đang chạy: {len(collector.collection_tasks)}"
     )
 
     if collector.collected_urls:
         recent = list(collector.collected_urls)[-3:]
-        text += "\n\n*Recent URLs:*\n"
+        text += "\n\n*URL gần nhất:*\n"
         for i, url in enumerate(recent, 1):
             display = url[:40] + "..." if len(url) > 40 else url
             text += f"{i}. `{display}`\n"
@@ -244,7 +236,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not collector.collected_urls:
-        await update.message.reply_text("❌ No URLs collected yet")
+        await update.message.reply_text("❌ Chưa có URL nào được thu thập")
         return
 
     chat_id = update.effective_chat.id
@@ -256,32 +248,32 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_document(
                     document=f,
                     filename=os.path.basename(filename),
-                    caption=f"📁 {len(collector.collected_urls)} URLs"
+                    caption=f"📁 Tổng cộng: {len(collector.collected_urls)} URL"
                 )
             os.remove(filename)
         except Exception as e:
-            await update.message.reply_text(f"❌ Send error: {str(e)}")
+            await update.message.reply_text(f"❌ Gửi tệp lỗi: {str(e)}")
     else:
-        await update.message.reply_text("❌ Could not create file")
+        await update.message.reply_text("❌ Không thể tạo tệp")
 
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if chat_id in collector.collection_tasks:
         collector.collection_tasks[chat_id].cancel()
-        await update.message.reply_text("⏹️ Collection stopped")
+        await update.message.reply_text("⏹️ Đã dừng thu thập")
         collector.collection_tasks.pop(chat_id, None)
     else:
-        await update.message.reply_text("❌ No active collection")
+        await update.message.reply_text("❌ Không có tiến trình nào đang chạy")
 
 async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     count = len(collector.collected_urls)
     collector.collected_urls.clear()
     await collector.close_session()
-    await update.message.reply_text(f"🗑️ Cleared {count} URLs")
+    await update.message.reply_text(f"🗑️ Đã xoá {count} URL")
 
 def main():
     if not BOT_TOKEN:
-        print("❌ TELEGRAM_TOKEN not set")
+        print("❌ TELEGRAM_TOKEN chưa được thiết lập")
         return
 
     app = Application.builder().token(BOT_TOKEN).build()
@@ -293,13 +285,13 @@ def main():
     app.add_handler(CommandHandler("stop", stop))
     app.add_handler(CommandHandler("clear", clear))
 
-    print("🤖 Optimized URL Collector Bot is running...")
+    print("🤖 Bot Thu Thập URL đang chạy...")
     app.run_polling()
 
 if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        print("\n👋 Bot stopped")
+        print("\n👋 Bot đã dừng")
     finally:
         asyncio.run(collector.close_session())
