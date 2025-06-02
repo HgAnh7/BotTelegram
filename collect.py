@@ -126,14 +126,13 @@ collector = URLCollector()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 *Bot Thu Thập URL*
-\n\n"
+        "🤖 *Bot Thu Thập URL*\n\n"
         "Lệnh có thể sử dụng:\n"
         "• /collect <api_url> <số_lượng> [tên_trường_url] - Bắt đầu thu thập URL\n"
         "• /status - Xem trạng thái bot\n"
-        "• /downlad - Tả danh sách URL đã thu thập\n"
-        "• /stp - Dng quá trình thu thập\n"
-        "• /cear  Xóa toàn bộ URL đã lưu\n\n"
+        "• /download - Tải danh sách URL đã thu thập\n"
+        "• /stop - Dừng quá trình thu thập\n"
+        "• /clear - Xoá toàn bộ URL đã lưu\n\n"
         "*Ví dụ:* `/collect https://picsum.photos/200/300 100`",
         parse_mode='Markdown'
     )
