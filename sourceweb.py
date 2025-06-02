@@ -57,7 +57,7 @@ async def source_web(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     
     try:
         # Thông báo bắt đầu quá trình
-        status_message = await update.message.reply_text(f"Đang bắt đầu tải xuống source code từ {url}...")
+        status_message = await update.message.reply_text(f"Đang bắt đầu tải xuống source code từ {url}")
         
         # Tạo tên file từ URL
         domain = urllib.parse.urlparse(url).netloc
