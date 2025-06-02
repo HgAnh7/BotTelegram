@@ -1,5 +1,6 @@
 Flask
 pillow
+aiohttp
 telebot
 requests
 beautifulsoup4
