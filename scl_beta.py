@@ -158,7 +158,7 @@ def soundcloud(message):
     for i in range(len(tracks)):
         button = types.InlineKeyboardButton(
             text=str(i + 1), 
-            callback_data=f"scl_{message.from_user.id}_{i}"
+            callback_data=f"scl_{message.chat.id}_{i}"
         )
         buttons.append(button)
     
@@ -168,7 +168,7 @@ def soundcloud(message):
     sent = bot.reply_to(message, response_text, parse_mode='HTML', reply_markup=markup)
     
     # Lưu data cho callback
-    scl_data[f"{message.from_user.id}"] = {
+    scl_data[f"{message.chat.id}"] = {
         "tracks": tracks,
         "message_id": sent.message_id
     }
@@ -178,11 +178,11 @@ def handle_soundcloud_callback(call):
     try:
         # Parse callback data
         parts = call.data.split('_')
-        user_id = int(parts[1])
+        chat_id = int(parts[1])
         track_index = int(parts[2])
         
         # Kiểm tra quyền truy cập
-        if call.from_user.id != user_id:
+        if call.message.chat.id != chat_id:
             bot.answer_callback_query(call.id, "❌ Bạn không có quyền sử dụng nút này!", show_alert=True)
             return
         
@@ -191,7 +191,7 @@ def handle_soundcloud_callback(call):
             bot.answer_callback_query(call.id, "❌ Dữ liệu đã hết hạn!", show_alert=True)
             return
         
-        data = scl_data[str(user_id)]
+        data = scl_data[str(chat_id)]
         tracks = data["tracks"]
         
         # Kiểm tra index hợp lệ
@@ -225,14 +225,12 @@ def handle_soundcloud_callback(call):
             )
             return
         
-        caption = f"""<blockquote>
-⭔───────────────⭓
+        caption = f"""<blockquote expandable>⭔───────────────⭓
  <b>{track['title']}</b>
- Nghệ sĩ: {track['user']['username']}
- Lượt nghe: {track['playback_count']:,} | Lượt thích: {track['likes_count']:,}
- Nguồn: <b>SoundCloud 🎶</b> 
-⭓───────────────⭔
-</blockquote>"""
+ » <b>Nghệ sĩ:</b> {track['user']['username']}
+ » <b>Lượt nghe:</b> {track['playback_count']:,} | <b>Lượt thích:</b> {track['likes_count']:,}
+ » <b>Nguồn:</b> SoundCloud 🎶 
+⭓───────────────⭔</blockquote>"""
         
         # Download and send audio
         try:
@@ -258,8 +256,8 @@ def handle_soundcloud_callback(call):
                 pass
             
             # Clean up data
-            if str(user_id) in scl_data:
-                del scl_data[str(user_id)]
+            if str(chat_id) in scl_data:
+                del scl_data[str(chat_id)]
                 
         except Exception as e:
             bot.edit_message_text(
