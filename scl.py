@@ -3,7 +3,6 @@ import os
 import re
 import json
 import time
-import random
 import telebot
 import requests
 
@@ -11,69 +10,38 @@ scl_data = {}
 PLATFORM = "soundcloud"
 API_BASE = "https://api-v2.soundcloud.com"
 CONFIG_PATH = "config.json"
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
-]
-ACCEPT_LANGUAGES = ["en-US,en;q=0.9", "fr-FR,fr;q=0.9", "es-ES,es;q=0.9", "de-DE,de;q=0.9", "zh-CN,zh;q=0.9"]
 
-# TÔN TRỌNG TÁC GIẢ, KHÔNG XÓA DÒNG NÀY
-# SOURCE API SOUNDCLOUD SEARCH AND DOWNLOAD BY HOANGANH
-
-token = os.getenv("TELEGRAM_TOKEN")
-bot = telebot.TeleBot(token)
-
-def get_random_element(array):
-    return random.choice(array)
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+bot = telebot.TeleBot(TOKEN)
 
 def get_headers():
     return {
-        "User-Agent": get_random_element(USER_AGENTS),
-        "Accept-Language": get_random_element(ACCEPT_LANGUAGES),
-        "Referer": "https://soundcloud.com/",
-        "Upgrade-Insecure-Requests": "1",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://soundcloud.com/"
     }
 
 def get_client_id():
+    # Đọc config sẵn
+    config = {}
+    if os.path.exists(CONFIG_PATH):
+        with open(CONFIG_PATH, 'r') as f:
+            config = json.load(f)
+        if config.get('client_id'):
+            return config['client_id']
+
+    # Nếu chưa có trong config, fetch script để lấy
     try:
-        config = {}
-        if os.path.exists(CONFIG_PATH):
-            with open(CONFIG_PATH, 'r') as f:
-                config = json.load(f)
-            if config.get('client_id'):
-                return config['client_id']
-
-        response = requests.get("https://soundcloud.com/", headers=get_headers())
-        response.raise_for_status()
-        script_tags = re.findall(r'<script crossorigin src="([^"]+)"', response.text)
-        script_urls = [url for url in script_tags if url.startswith("https")]
-
-        if not script_urls:
-            raise ValueError("No script URLs found")
-
-        script_response = requests.get(script_urls[-1], headers=get_headers())
-        script_response.raise_for_status()
-        client_id_match = re.search(r',client_id:"([^"]+)"', script_response.text)
-        if not client_id_match:
-            raise ValueError("Client ID not found in script")
-
-        client_id = client_id_match.group(1)
-
-        config['client_id'] = client_id
+        resp = requests.get("https://soundcloud.com/", headers=get_headers())
+        resp.raise_for_status()
+        urls = re.findall(r'<script crossorigin src="(https[^"]+)"', resp.text)
+        script = requests.get(urls[-1], headers=get_headers()).text
+        cid = re.search(r',client_id:"([^"]+)"', script).group(1)
+        config['client_id'] = cid
         with open(CONFIG_PATH, 'w') as f:
             json.dump(config, f, indent=2)
-
-        return client_id
-    except Exception as e:
-        print(f"Error fetching client ID: {e}")
-        if os.path.exists(CONFIG_PATH):
-            with open(CONFIG_PATH, 'r') as f:
-                config = json.load(f)
-            return config.get('client_id', 'W00nmY7TLer3uyoEo1sWK3Hhke5Ahdl9')
-        return 'W00nmY7TLer3uyoEo1sWK3Hhke5Ahdl9'
+        return cid
+    except:
+        return config.get('client_id', 'vjvE4M9RytEg9W09NH1ge2VyrZPUSKo5')
 
 def get_music_info(question, limit=10):
     try:
@@ -176,14 +144,12 @@ def handle_soundcloud_selection(msg):
     if not audio_url or not thumbnail_url:
         bot.reply_to(msg, "🚫 Không tìm thấy nguồn audio hoặc thumbnail.", parse_mode='HTML')
         return
-    caption = f"""<blockquote>
-⭔───────────────⭓
+    caption = f"""<blockquote>⭔───────────────⭓
  <b>{track['title']}</b>
- Nghệ sĩ: {track['user']['username']}
- Lượt nghe: {track['playback_count']:,} | Lượt thích: {track['likes_count']:,}
- Nguồn: <b>SoundCloud 🎶</b> 
-⭓───────────────⭔
-</blockquote>"""
+ » <b>Nghệ sĩ:</b> {track['user']['username']}
+ » <b>Lượt nghe:</b> {track['playback_count']:,} | <b>Lượt thích:</b> {track['likes_count']:,}
+ » <b>Nguồn:</b> SoundCloud 🎶 
+⭓───────────────⭔</blockquote>"""
     try:
         bot.delete_message(msg.chat.id, reply_id)
     except:
