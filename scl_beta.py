@@ -182,7 +182,7 @@ def handle_soundcloud_callback(call):
         track_index = int(parts[2])
         
         # Kiểm tra quyền truy cập
-        if call.message.from_user.id != user_id:
+        if call.from_user.id != user_id:
             bot.answer_callback_query(call.id, "❌ Bạn không có quyền sử dụng nút này!", show_alert=True)
             return
         
