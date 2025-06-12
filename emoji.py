@@ -47,8 +47,6 @@ while True:
                             f.write(json.dumps(result, ensure_ascii=False) + "\n")
                     else:
                         requests.post(f"https://api.telegram.org/bot{bot_token}/sendMessage", data={"chat_id": chat_id, "text": "Bot không thể sử dụng trong đoạn chat này!"})
- 
-        time.sleep(1)
 
     except Exception as e:
         print(f"Lỗi: {str(e)}")
