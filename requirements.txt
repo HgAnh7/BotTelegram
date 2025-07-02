@@ -1,6 +1,7 @@
 bs4
 lxml
 Flask
+psutil
 pillow
 aiohttp
 telebot
