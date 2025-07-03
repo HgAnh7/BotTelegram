@@ -198,7 +198,7 @@ def send_welcome(message):
     else:
         bot.send_message(message.chat.id, welcome_msg, reply_markup=create_main_menu(user.id))
 
-@bot.message_handler(commands=['add_subscription'])
+@bot.message_handler(commands=['add'])
 def add_subscription(message):
     if not is_admin(message.from_user.id):
         bot.send_message(message.chat.id, "⚠️ Bạn không phải là admin.")
@@ -219,7 +219,7 @@ def add_subscription(message):
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Lỗi: {e}")
 
-@bot.message_handler(commands=['remove_subscription'])
+@bot.message_handler(commands=['remove'])
 def remove_subscription(message):
     if not is_admin(message.from_user.id):
         bot.send_message(message.chat.id, "⚠️ Bạn không phải là admin.")
