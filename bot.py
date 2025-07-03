@@ -14,28 +14,27 @@ import signal
 import psutil
 import sqlite3
 import threading
-import base64
 
-TOKEN = os.getenv("TELEGRAM_TOKEN")  # Mã token của bot
-ADMIN_ID = 6379209139  # ID quản trị viên
-YOUR_USERNAME = '@HgAnh7'  # Tên người dùng với @
+ADMIN_ID = 6379209139
+ADMIN_USERNAME = "HgAnh7"
+TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 bot = telebot.TeleBot(TOKEN)
 
-thu_muc_tai_len = 'bot_tai_len'
+uploaded_files_dir = 'uploaded_bots'
 bot_scripts = {}
 stored_tokens = {}
 user_subscriptions = {}  
 user_files = {}  
 active_users = set()  
 
-bot_khoa = False
-che_do_mien_phi = False  
+bot_locked = False
+free_mode = False  
 
-if not os.path.exists(thu_muc_tai_len):
-    os.makedirs(thu_muc_tai_len)
+if not os.path.exists(uploaded_files_dir):
+    os.makedirs(uploaded_files_dir)
 
-def khoi_tao_db():
+def init_db():
     conn = sqlite3.connect('bot_data.db')
     c = conn.cursor()
     
@@ -51,7 +50,7 @@ def khoi_tao_db():
     conn.commit()
     conn.close()
 
-def tai_du_lieu():
+def load_data():
     conn = sqlite3.connect('bot_data.db')
     c = conn.cursor()
     
@@ -74,7 +73,7 @@ def tai_du_lieu():
     
     conn.close()
 
-def luu_thue_bao(user_id, expiry):
+def save_subscription(user_id, expiry):
     conn = sqlite3.connect('bot_data.db')
     c = conn.cursor()
     c.execute('INSERT OR REPLACE INTO subscriptions (user_id, expiry) VALUES (?, ?)', 
@@ -82,14 +81,14 @@ def luu_thue_bao(user_id, expiry):
     conn.commit()
     conn.close()
 
-def xoa_thue_bao_db(user_id):
+def remove_subscription_db(user_id):
     conn = sqlite3.connect('bot_data.db')
     c = conn.cursor()
     c.execute('DELETE FROM subscriptions WHERE user_id = ?', (user_id,))
     conn.commit()
     conn.close()
 
-def luu_tap_tin_nguoi_dung(user_id, file_name):
+def save_user_file(user_id, file_name):
     conn = sqlite3.connect('bot_data.db')
     c = conn.cursor()
     c.execute('INSERT INTO user_files (user_id, file_name) VALUES (?, ?)', 
@@ -97,7 +96,7 @@ def luu_tap_tin_nguoi_dung(user_id, file_name):
     conn.commit()
     conn.close()
 
-def xoa_tap_tin_nguoi_dung_db(user_id, file_name):
+def remove_user_file_db(user_id, file_name):
     conn = sqlite3.connect('bot_data.db')
     c = conn.cursor()
     c.execute('DELETE FROM user_files WHERE user_id = ? AND file_name = ?', 
@@ -105,485 +104,539 @@ def xoa_tap_tin_nguoi_dung_db(user_id, file_name):
     conn.commit()
     conn.close()
 
-def them_nguoi_dung_hoat_dong(user_id):
+def add_active_user(user_id):
     conn = sqlite3.connect('bot_data.db')
     c = conn.cursor()
     c.execute('INSERT OR IGNORE INTO active_users (user_id) VALUES (?)', (user_id,))
     conn.commit()
     conn.close()
 
-def xoa_nguoi_dung_hoat_dong(user_id):
+def remove_active_user(user_id):
     conn = sqlite3.connect('bot_data.db')
     c = conn.cursor()
     c.execute('DELETE FROM active_users WHERE user_id = ?', (user_id,))
     conn.commit()
     conn.close()
 
-khoi_tao_db()
-tai_du_lieu()
+init_db()
+load_data()
 
-def tao_menu_chinh(user_id):
+def create_main_menu(user_id):
     markup = types.InlineKeyboardMarkup()
-    nut_tai_len = types.InlineKeyboardButton('📤 Tải Lên Tệp', callback_data='upload')
-    nut_toc_do = types.InlineKeyboardButton('⚡ Tốc Độ Bot', callback_data='speed')
-    nut_lien_he = types.InlineKeyboardButton('📞 Liên Hệ Chủ Sở Hữu', url=f'https://t.me/{YOUR_USERNAME[1:]}')
+
+    markup.add(
+        types.InlineKeyboardButton('📤 Tải lên tệp', callback_data='upload'),
+        types.InlineKeyboardButton('⚡ Tốc độ Bot', callback_data='speed'),
+        types.InlineKeyboardButton('📞 Liên hệ admin', url=f'https://t.me/{ADMIN_USERNAME}')
+    )
+
     if user_id == ADMIN_ID:
-        nut_thue_bao = types.InlineKeyboardButton('💳 Thuê Bao', callback_data='subscription')
-        nut_thong_ke = types.InlineKeyboardButton('📊 Thống Kê', callback_data='stats')
-        nut_khoa_bot = types.InlineKeyboardButton('🔒 Khóa Bot', callback_data='lock_bot')
-        nut_mo_khoa_bot = types.InlineKeyboardButton('🔓 Mở Khóa Bot', callback_data='unlock_bot')
-        nut_che_do_mien_phi = types.InlineKeyboardButton('🔓 Chế Độ Miễn Phí', callback_data='free_mode')
-        nut_phat_tin = types.InlineKeyboardButton('📢 Phát Tin', callback_data='broadcast')
-        markup.add(nut_tai_len)
-        markup.add(nut_toc_do, nut_thue_bao, nut_thong_ke)
-        markup.add(nut_khoa_bot, nut_mo_khoa_bot, nut_che_do_mien_phi)
-        markup.add(nut_phat_tin)
-    else:
-        markup.add(nut_tai_len)
-        markup.add(nut_toc_do)
-    markup.add(nut_lien_he)
+        markup.add(
+            types.InlineKeyboardButton('💳 Đăng ký', callback_data='subscription'),
+            types.InlineKeyboardButton('📊 Thống kê', callback_data='stats'),
+            types.InlineKeyboardButton('🔒 Khóa Bot', callback_data='lock_bot'),
+            types.InlineKeyboardButton('🔓 Mở khóa Bot', callback_data='unlock_bot'),
+            types.InlineKeyboardButton('🔓 Free Mode', callback_data='free_mode'),
+            types.InlineKeyboardButton('📢 Broadcast', callback_data='broadcast')
+        )
+
     return markup
 
 @bot.message_handler(commands=['start'])
-def gui_loi_chao(message):
-    if bot_khoa:
-        bot.send_message(message.chat.id, "⚠️ Bot hiện đang bị khóa. Vui lòng thử lại sau.")
+def send_welcome(message):
+    if bot_locked:
+        bot.send_message(message.chat.id, "⚠️ Hiện tại bot đang bị khóa. Vui lòng thử lại sau.")
         return
 
-    user_id = message.from_user.id
-    user_name = message.from_user.first_name
-    user_username = message.from_user.username
+    user = message.from_user
+    user_id = user.id
+    user_name = user.first_name
+    user_username = f"{user.username}" if user.username else "Không có"
+    
 
     try:
         user_profile = bot.get_chat(user_id)
-        user_bio = user_profile.bio if user_profile.bio else "Không có tiểu sử"
-    except Exception as e:
-        print(f"❌ Không thể lấy tiểu sử: {e}")
-        user_bio = "Không có tiểu sử"
+        user_bio = user_profile.bio or "No bio"
+    except Exception:
+        user_bio = "No bio"
 
     try:
-        user_profile_photos = bot.get_user_profile_photos(user_id, limit=1)
-        if user_profile_photos.photos:
-            photo_file_id = user_profile_photos.photos[0][-1].file_id  
-        else:
-            photo_file_id = None
-    except Exception as e:
-        print(f"❌ Không thể lấy ảnh người dùng: {e}")
+        photos = bot.get_user_profile_photos(user_id, limit=1)
+        photo_file_id = photos.photos[0][-1].file_id if photos.photos else None
+    except Exception:
         photo_file_id = None
 
     if user_id not in active_users:
         active_users.add(user_id)  
-        them_nguoi_dung_hoat_dong(user_id)  
+        add_active_user(user_id)  
 
         try:
-            thong_bao_chao_admin = f"🎉 Người dùng mới tham gia bot!\n\n"
-            thong_bao_chao_admin += f"👤 Tên: {user_name}\n"
-            thong_bao_chao_admin += f"📌 Tên người dùng: @{user_username}\n"
-            thong_bao_chao_admin += f"🆔 ID: {user_id}\n"
-            thong_bao_chao_admin += f"📝 Tiểu sử: {user_bio}\n"
+            admin_msg = (
+                f"🎉 Người dùng mới tham gia bot!\n\n"
+                f"👤 Name: {user_name}\n"
+                f"📌 Username: @{user_username}\n"
+                f"🆔 ID: {user_id}\n"
+                f"📝 Bio: {user_bio}\n"
+            )
 
             if photo_file_id:
-                bot.send_photo(ADMIN_ID, photo_file_id, caption=thong_bao_chao_admin)
+                bot.send_photo(ADMIN_ID, photo_file_id, caption=admin_msg)
             else:
-                bot.send_message(ADMIN_ID, thong_bao_chao_admin)
-        except Exception as e:
-            print(f"❌ Không thể gửi thông tin người dùng đến quản trị viên: {e}")
+                bot.send_message(ADMIN_ID, admin_msg)
+        except Exception:
+            pass
 
-    thong_bao_chao = f"〽️┇Chào mừng: {user_name}\n"
-    thong_bao_chao += f"🆔┇ID của bạn: {user_id}\n"
-    thong_bao_chao += f"♻️┇Tên người dùng: @{user_username}\n"
-    thong_bao_chao += f"📰┇Tiểu sử: {user_bio}\n\n"
-    thong_bao_chao += "〽️ Tôi là bot lưu trữ tệp Python 🎗 Bạn có thể sử dụng các nút bên dưới để điều khiển ♻️"
+    welcome_msg = (
+        f"〽️┇Welcome: {user_name}\n"
+        f"🆔┇Your ID: {user_id}\n"
+        f"♻️┇Username: @{user_username}\n"
+        f"📰┇Bio: {user_bio}\n\n"
+        "〽️ I'm a Python file hosting bot 🎗 You can use the buttons below to control ♻️"
+    )
 
     if photo_file_id:
-        bot.send_photo(message.chat.id, photo_file_id, caption=thong_bao_chao, reply_markup=tao_menu_chinh(user_id))
+        bot.send_photo(message.chat.id, photo_file_id, caption=welcome_msg, reply_markup=create_main_menu(user_id))
     else:
-        bot.send_message(message.chat.id, thong_bao_chao, reply_markup=tao_menu_chinh(user_id))
+        bot.send_message(message.chat.id, welcome_msg, reply_markup=create_main_menu(user_id))
 
 @bot.callback_query_handler(func=lambda call: call.data == 'broadcast')
-def phat_tin_callback(call):
-    if call.from_user.id == ADMIN_ID:
-        bot.send_message(call.message.chat.id, "Gửi tin nhắn bạn muốn phát đi:")
-        bot.register_next_step_handler(call.message, xu_ly_tin_nhan_phat)
-    else:
-        bot.send_message(call.message.chat.id, "⚠️ Bạn không phải là nhà phát triển.")
+def broadcast_callback(call):
+    if call.from_user.id != ADMIN_ID:
+        bot.answer_callback_query(call.id, "⚠️ Bạn không có quyền.", show_alert=True)
+        return
 
-def xu_ly_tin_nhan_phat(message):
-    if message.from_user.id == ADMIN_ID:
-        tin_nhan_phat = message.text
-        so_luong_thanh_cong = 0
-        so_luong_that_bai = 0
+    bot.send_message(call.message.chat.id, "📝 Gửi nội dung bạn muốn thông báo đến tất cả người dùng:")
+    bot.register_next_step_handler(call.message, process_broadcast_message)
 
-        for user_id in active_users:
-            try:
-                bot.send_message(user_id, tin_nhan_phat)
-                so_luong_thanh_cong += 1
-            except Exception as e:
-                print(f"❌ Không thể gửi tin nhắn đến người dùng {user_id}: {e}")
-                so_luong_that_bai += 1
+def process_broadcast_message(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.send_message(message.chat.id, "⚠️ Bạn không phải là admin.")
+        return
 
-        bot.send_message(message.chat.id, f"✅ Tin nhắn đã được gửi đến {so_luong_thanh_cong} người dùng.\n❌ Không thể gửi đến {so_luong_that_bai} người dùng.")
-    else:
-        bot.send_message(message.chat.id, "⚠️ Bạn không phải là nhà phát triển.")
+    broadcast_message = message.text
+    success_count = 0
+    fail_count = 0
+
+    for user_id in active_users:
+        try:
+            bot.send_message(user_id, broadcast_message)
+            success_count += 1
+        except Exception:
+            fail_count += 1
+
+    bot.send_message(message.chat.id, f"📢 Đã gửi thông báo:\n🎉 Thành công: {success_count}\n🤦 Thất bại: {fail_count}")
 
 @bot.callback_query_handler(func=lambda call: call.data == 'speed')
-def thong_tin_toc_do_bot(call):
+def bot_speed_info(call):
     try:
-        thoi_gian_bat_dau = time.time()
-        response = requests.get(f'https://api.telegram.org/bot{TOKEN}/getMe')
-        do_tre = time.time() - thoi_gian_bat_dau
-        if response.ok:
-            bot.send_message(call.message.chat.id, f"⚡ Tốc độ bot: {do_tre:.2f} giây.")
-        else:
-            bot.send_message(call.message.chat.id, "⚠️ Không thể lấy tốc độ bot.")
+        start_time = time.time()
+        response = requests.get(f'https://api.telegram.org/bot{TOKEN}/getMe', timeout=5)
+        latency = f"⚡ Độ trễ: {time.time() - start_time:.2f}s" if response.ok else "⚠️ Lỗi khi kiểm tra"
     except Exception as e:
-        bot.send_message(call.message.chat.id, f"❌ Lỗi khi kiểm tra tốc độ bot: {e}")
+        latency = f"❌ Lỗi kiểm tra tốc độ bot: {e}"
+
+    bot.send_message(call.message.chat.id, latency)
 
 @bot.callback_query_handler(func=lambda call: call.data == 'upload')
-def yeu_cau_tai_len_tap_tin(call):
+def ask_to_upload_file(call):
     user_id = call.from_user.id
-    if bot_khoa:
-        bot.send_message(call.message.chat.id, f"⚠️ Bot hiện đang bị khóa. Vui lòng liên hệ nhà phát triển {YOUR_USERNAME}.")
+    if bot_locked:
+        bot.send_message(user_id, f"⚠️ Bot hiện đang bị khóa. Vui lòng liên hệ @{ADMIN_USERNAME}.")
         return
-    if che_do_mien_phi or (user_id in user_subscriptions and user_subscriptions[user_id]['expiry'] > datetime.now()):
-        bot.send_message(call.message.chat.id, "📄 Vui lòng gửi tệp bạn muốn tải lên.")
+
+    if free_mode or (user_id in user_subscriptions and user_subscriptions[user_id]['expiry'] > datetime.now()):
+        message = "📄 Gửi file .py hoặc .zip bạn muốn tải lên."
     else:
-        bot.send_message(call.message.chat.id, f"⚠️ Bạn cần đăng ký thuê bao để sử dụng tính năng này. Vui lòng liên hệ nhà phát triển {YOUR_USERNAME}")
+        message = f"⚠️ Bạn cần đăng ký để sử dụng tính năng này. Liên hệ @{ADMIN_USERNAME}."
+    bot.send_message(user_id, message)
 
 @bot.callback_query_handler(func=lambda call: call.data == 'subscription')
-def menu_thue_bao(call):
-    if call.from_user.id == ADMIN_ID:
-        markup = types.InlineKeyboardMarkup()
-        nut_them_thue_bao = types.InlineKeyboardButton('➕ Thêm Thuê Bao', callback_data='add_subscription')
-        nut_xoa_thue_bao = types.InlineKeyboardButton('➖ Xóa Thuê Bao', callback_data='remove_subscription')
-        markup.add(nut_them_thue_bao, nut_xoa_thue_bao)
-        bot.send_message(call.message.chat.id, "Chọn hành động bạn muốn thực hiện:", reply_markup=markup)
-    else:
-        bot.send_message(call.message.chat.id, "⚠️ Bạn không phải là nhà phát triển.")
+def subscription_menu(call):
+    if call.from_user.id != ADMIN_ID:
+        bot.send_message(call.message.chat.id, "⚠️ Bạn không phải là admin.")
+        return
+
+    markup = types.InlineKeyboardMarkup()
+    add_subscription = types.InlineKeyboardButton('➕ Thêm đăng ký', callback_data='add_subscription')
+    remove_subscription = types.InlineKeyboardButton('➖ Gỡ đăng ký', callback_data='remove_subscription')
+    markup.add(add_subscription, remove_subscription)
+
+    bot.send_message(call.message.chat.id, "Chọn thao tác bạn muốn thực hiện:", reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda call: call.data == 'stats')
-def menu_thong_ke(call):
-    if call.from_user.id == ADMIN_ID:
-        tong_so_tap_tin = sum(len(files) for files in user_files.values())
-        tong_so_nguoi_dung = len(user_files)
-        so_nguoi_dung_hoat_dong = len(active_users)
-        bot.send_message(call.message.chat.id, f"📊 Thống kê:\n\n📂 Tệp đã tải lên: {tong_so_tap_tin}\n👤 Tổng số người dùng: {tong_so_nguoi_dung}\n👥 Người dùng hoạt động: {so_nguoi_dung_hoat_dong}")
-    else:
-        bot.send_message(call.message.chat.id, "⚠️ Bạn không phải là nhà phát triển.")
+def stats_menu(call):
+    if call.from_user.id != ADMIN_ID:
+        bot.send_message(call.message.chat.id, "⚠️ Bạn không phải là admin.")
+        return
+
+    total_files = sum(len(files) for files in user_files.values())
+    total_users = len(user_files)
+    active_users_count = len(active_users)
+    
+    text = (
+        "📊 Thống kê bot:\n\n"
+        f"📂 Tổng số file: {total_files}\n"
+        f"👤 Tổng người dùng: {total_users}\n"
+        f"✅ Người dùng đang hoạt động: {active_users_count}"
+    )
+    bot.send_message(call.message.chat.id, text)
 
 @bot.callback_query_handler(func=lambda call: call.data == 'add_subscription')
-def them_thue_bao_callback(call):
-    if call.from_user.id == ADMIN_ID:
-        bot.send_message(call.message.chat.id, "Gửi ID người dùng và số ngày theo định dạng:\n/add_subscription <user_id> <days>")
-    else:
-        bot.send_message(call.message.chat.id, "⚠️ Bạn không phải là nhà phát triển.")
+def add_subscription_callback(call):
+    if call.from_user.id != ADMIN_ID:
+        bot.send_message(call.message.chat.id, "⚠️ Bạn không phải là admin.")
+        return
+
+    bot.send_message(
+        call.message.chat.id,
+        "📥 Gửi `user_id` và số ngày theo định dạng:\n`/add_subscription <user_id> <days>`",
+        parse_mode="Markdown"
+    )
 
 @bot.callback_query_handler(func=lambda call: call.data == 'remove_subscription')
-def xoa_thue_bao_callback(call):
-    if call.from_user.id == ADMIN_ID:
-        bot.send_message(call.message.chat.id, "Gửi ID người dùng theo định dạng:\n/remove_subscription <user_id>")
-    else:
-        bot.send_message(call.message.chat.id, "⚠️ Bạn không phải là nhà phát triển.")
+def remove_subscription_callback(call):
+    if call.from_user.id != ADMIN_ID:
+        bot.send_message(call.message.chat.id, "⚠️ Bạn không phải là admin.")
+        return
+    bot.send_message(
+        call.message.chat.id,
+        "🗑️ Gửi `user_id` cần xóa theo định dạng:\n`/remove_subscription <user_id>`",
+        parse_mode="Markdown"
+    )
 
 @bot.message_handler(commands=['add_subscription'])
-def them_thue_bao(message):
-    if message.from_user.id == ADMIN_ID:
-        try:
-            user_id = int(message.text.split()[1])
-            days = int(message.text.split()[2])
-            ngay_het_han = datetime.now() + timedelta(days=days)
-            user_subscriptions[user_id] = {'expiry': ngay_het_han}
-            luu_thue_bao(user_id, ngay_het_han)
-            bot.send_message(message.chat.id, f"✅ Đã thêm thuê bao {days} ngày cho người dùng {user_id}.")
-            bot.send_message(user_id, f"🎉 Thuê bao của bạn đã được kích hoạt trong {days} ngày. Bạn có thể sử dụng bot ngay bây giờ!")
-        except Exception as e:
-            bot.send_message(message.chat.id, f"❌ Lỗi: {e}")
-    else:
-        bot.send_message(message.chat.id, "⚠️ Bạn không phải là nhà phát triển.")
-
-@bot.message_handler(commands=['remove_subscription'])
-def xoa_thue_bao(message):
-    if message.from_user.id == ADMIN_ID:
-        try:
-            user_id = int(message.text.split()[1])
-            if user_id in user_subscriptions:
-                del user_subscriptions[user_id]
-                xoa_thue_bao_db(user_id)
-                bot.send_message(message.chat.id, f"✅ Đã xóa thuê bao của người dùng {user_id}.")
-                bot.send_message(user_id, "⚠️ Thuê bao của bạn đã bị xóa. Bạn không thể sử dụng bot nữa.")
-            else:
-                bot.send_message(message.chat.id, f"⚠️ Người dùng {user_id} không có thuê bao.")
-        except Exception as e:
-            bot.send_message(message.chat.id, f"❌ Lỗi: {e}")
-    else:
-        bot.send_message(message.chat.id, "⚠️ Bạn không phải là nhà phát triển.")
-
-@bot.message_handler(commands=['user_files'])
-def hien_thi_tap_tin_nguoi_dung(message):
-    if message.from_user.id == ADMIN_ID:
-        try:
-            user_id = int(message.text.split()[1])
-            if user_id in user_files:
-                danh_sach_tap_tin = "\n".join(user_files[user_id])
-                bot.send_message(message.chat.id, f"📂 Tệp đã tải lên bởi người dùng {user_id}:\n{danh_sach_tap_tin}")
-            else:
-                bot.send_message(message.chat.id, f"⚠️ Người dùng {user_id} chưa tải lên tệp nào.")
-        except Exception as e:
-            bot.send_message(message.chat.id, f"❌ Lỗi: {e}")
-    else:
-        bot.send_message(message.chat.id, "⚠️ Bạn không phải là nhà phát triển.")
-
-@bot.message_handler(commands=['lock'])
-def khoa_bot(message):
-    if message.from_user.id == ADMIN_ID:
-        global bot_khoa
-        bot_khoa = True
-        bot.send_message(message.chat.id, "🔒 Bot đã bị khóa.")
-    else:
-        bot.send_message(message.chat.id, "⚠️ Bạn không phải là nhà phát triển.")
-
-@bot.message_handler(commands=['unlock'])
-def mo_khoa_bot(message):
-    if message.from_user.id == ADMIN_ID:
-        global bot_khoa
-        bot_khoa = False
-        bot.send_message(message.chat.id, "🔓 Bot đã được mở khóa.")
-    else:
-        bot.send_message(message.chat.id, "⚠️ Bạn không phải là nhà phát triển.")
-
-@bot.callback_query_handler(func=lambda call: call.data == 'lock_bot')
-def khoa_bot_callback(call):
-    if call.from_user.id == ADMIN_ID:
-        global bot_khoa
-        bot_khoa = True
-        bot.send_message(call.message.chat.id, "🔒 Bot đã bị khóa.")
-    else:
-        bot.send_message(call.message.chat.id, "⚠️ Bạn không phải là nhà phát triển.")
-
-@bot.callback_query_handler(func=lambda call: call.data == 'unlock_bot')
-def mo_khoa_bot_callback(call):
-    if call.from_user.id == ADMIN_ID:
-        global bot_khoa
-        bot_khoa = False
-        bot.send_message(call.message.chat.id, "🔓 Bot đã được mở khóa.")
-    else:
-        bot.send_message(call.message.chat.id, "⚠️ Bạn không phải là nhà phát triển.")
-
-@bot.callback_query_handler(func=lambda call: call.data == 'free_mode')
-def bat_tat_che_do_mien_phi(call):
-    if call.from_user.id == ADMIN_ID:
-        global che_do_mien_phi
-        che_do_mien_phi = not che_do_mien_phi
-        trang_thai = "mở" if che_do_mien_phi else "đóng"
-        bot.send_message(call.message.chat.id, f"🔓 Chế độ miễn phí hiện đang: {trang_thai}.")
-    else:
-        bot.send_message(call.message.chat.id, "⚠️ Bạn không phải là nhà phát triển.")
-
-@bot.message_handler(content_types=['document'])
-def xu_ly_tap_tin(message):
-    user_id = message.from_user.id
-    if bot_khoa:
-        bot.reply_to(message, f"⚠️ Bot hiện đang bị khóa. Vui lòng liên hệ nhà phát triển {YOUR_USERNAME}")
+def add_subscription(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.send_message(message.chat.id, "⚠️ Bạn không phải là admin.")
         return
-    if che_do_mien_phi or (user_id in user_subscriptions and user_subscriptions[user_id]['expiry'] > datetime.now()):
-        try:
-            file_id = message.document.file_id
-            file_info = bot.get_file(file_id)
-            downloaded_file = bot.download_file(file_info.file_path)
-            file_name = message.document.file_name
 
-            if not file_name.endswith('.py') and not file_name.endswith('.zip'):
-                bot.reply_to(message, "⚠️ Bot chỉ chấp nhận tệp Python (.py) hoặc tệp nén zip.")
-                return
-
-            if file_name.endswith('.zip'):
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    thu_muc_zip = os.path.join(temp_dir, file_name.split('.')[0])
-
-                    duong_dan_zip = os.path.join(temp_dir, file_name)
-                    with open(duong_dan_zip, 'wb') as new_file:
-                        new_file.write(downloaded_file)
-                    with zipfile.ZipFile(duong_dan_zip, 'r') as zip_ref:
-                        zip_ref.extractall(thu_muc_zip)
-
-                    duong_dan_thu_muc_cuoi = os.path.join(thu_muc_tai_len, file_name.split('.')[0])
-                    if not os.path.exists(duong_dan_thu_muc_cuoi):
-                        os.makedirs(duong_dan_thu_muc_cuoi)
-
-                    for root, dirs, files in os.walk(thu_muc_zip):
-                        for file in files:
-                            tep_nguon = os.path.join(root, file)
-                            tep_dich = os.path.join(duong_dan_thu_muc_cuoi, file)
-                            shutil.move(tep_nguon, tep_dich)
-
-                    tep_py = [f for f in os.listdir(duong_dan_thu_muc_cuoi) if f.endswith('.py')]
-                    if tep_py:
-                        kich_ban_chinh = tep_py[0]  
-                        chay_kich_ban(os.path.join(duong_dan_thu_muc_cuoi, kich_ban_chinh), message.chat.id, duong_dan_thu_muc_cuoi, kich_ban_chinh, message)
-                    else:
-                        bot.send_message(message.chat.id, f"❌ Không tìm thấy tệp Python (.py) trong kho lưu trữ.")
-                        return
-
-            else:
-                duong_dan_kich_ban = os.path.join(thu_muc_tai_len, file_name)
-                with open(duong_dan_kich_ban, 'wb') as new_file:
-                    new_file.write(downloaded_file)
-
-                chay_kich_ban(duong_dan_kich_ban, message.chat.id, thu_muc_tai_len, file_name, message)
-
-            if user_id not in user_files:
-                user_files[user_id] = []
-            user_files[user_id].append(file_name)
-            luu_tap_tin_nguoi_dung(user_id, file_name)
-
-        except Exception as e:
-            bot.reply_to(message, f"❌ Lỗi: {e}")
-    else:
-        bot.reply_to(message, f"⚠️ Bạn cần đăng ký thuê bao để sử dụng tính năng này. Vui lòng liên hệ nhà phát triển {YOUR_USERNAME}")
-
-def chay_kich_ban(duong_dan_kich_ban, chat_id, duong_dan_thu_muc, ten_tap_tin, tin_nhan_goc):
     try:
-        duong_dan_yeu_cau = os.path.join(os.path.dirname(duong_dan_kich_ban), 'requirements.txt')
-        if os.path.exists(duong_dan_yeu_cau):
-            bot.send_message(chat_id, "🔄 Đang cài đặt các yêu cầu...")
-            subprocess.check_call(['pip', 'install', '-r', duong_dan_yeu_cau])
+        user_id = int(message.text.split()[1])
+        days = int(message.text.split()[2])
+        expiry_date = datetime.now() + timedelta(days=days)
 
-        bot.send_message(chat_id, f"🚀 Đang chạy bot {ten_tap_tin}...")
-        tien_trinh = subprocess.Popen(['python3', duong_dan_kich_ban], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        bot_scripts[chat_id] = {'process': tien_trinh, 'folder_path': duong_dan_thu_muc}
+        user_subscriptions[user_id] = {'expiry': expiry_date}
+        save_subscription(user_id, expiry_date)
 
-        token = trich_xuat_token_tu_kich_ban(duong_dan_kich_ban)
-        thong_tin_nguoi_dung = f"@{tin_nhan_goc.from_user.username}" if tin_nhan_goc.from_user.username else str(tin_nhan_goc.from_user.id)
-        
-        if token:
-            try:
-                thong_tin_bot = requests.get(f'https://api.telegram.org/bot{token}/getMe').json()
-                ten_bot = thong_tin_bot['result']['username']
-                chu_thich = f"📤 Người dùng {thong_tin_nguoi_dung} đã tải lên tệp bot mới. Tên bot: @{ten_bot}"
-            except:
-                chu_thich = f"📤 Người dùng {thong_tin_nguoi_dung} đã tải lên tệp bot mới, nhưng không thể lấy tên bot."
-        else:
-            chu_thich = f"📤 Người dùng {thong_tin_nguoi_dung} đã tải lên tệp bot mới, nhưng không tìm thấy token."
+        bot.send_message(message.chat.id, f"✅ Đã thêm {days} ngày cho người dùng `{user_id}`.", parse_mode="Markdown")
+        bot.send_message(user_id, f"🎉 Bạn đã được kích hoạt gói {days} ngày. Bắt đầu sử dụng bot nhé!")
 
-        bot.send_document(ADMIN_ID, open(duong_dan_kich_ban, 'rb'), caption=chu_thich)
-
-        markup = types.InlineKeyboardMarkup()
-        nut_dung = types.InlineKeyboardButton(f"🔴 Dừng {ten_tap_tin}", callback_data=f'stop_{chat_id}_{ten_tap_tin}')
-        nut_xoa = types.InlineKeyboardButton(f"🗑️ Xóa {ten_tap_tin}", callback_data=f'delete_{chat_id}_{ten_tap_tin}')
-        markup.add(nut_dung, nut_xoa)
-        bot.send_message(chat_id, f"Sử dụng các nút bên dưới để điều khiển bot 👇", reply_markup=markup)
-
-    except Exception as e:
-        bot.send_message(chat_id, f"❌ Lỗi khi chạy bot: {e}")
-
-def trich_xuat_token_tu_kich_ban(duong_dan_kich_ban):
-    try:
-        with open(duong_dan_kich_ban, 'r') as tap_tin_kich_ban:
-            noi_dung_tap_tin = tap_tin_kich_ban.read()
-
-            token_trung_khop = re.search(r"['\"]([0-9]{9,10}:[A-Za-z0-9_-]+)['\"]", noi_dung_tap_tin)
-            if token_trung_khop:
-                return token_trung_khop.group(1)
-            else:
-                print(f"[CẢNH BÁO] Không tìm thấy token trong {duong_dan_kich_ban}")
-    except Exception as e:
-        print(f"[LỖI] Không thể trích xuất token từ {duong_dan_kich_ban}: {e}")
-    return None
-
-def lay_tap_tin_tuy_chinh_de_chay(message):
-    try:
-        chat_id = message.chat.id
-        duong_dan_thu_muc = bot_scripts[chat_id]['folder_path']
-        duong_dan_tap_tin_tuy_chinh = os.path.join(duong_dan_thu_muc, message.text)
-
-        if os.path.exists(duong_dan_tap_tin_tuy_chinh):
-            chay_kich_ban(duong_dan_tap_tin_tuy_chinh, chat_id, duong_dan_thu_muc, message.text, message)
-        else:
-            bot.send_message(chat_id, f"❌ Tệp được chỉ định không tồn tại. Vui lòng kiểm tra tên và thử lại.")
+    except ValueError:
+        bot.send_message(message.chat.id, "⚠️ Sai định dạng. Dùng:\n`/add_subscription <user_id> <số ngày>`", parse_mode="Markdown")   
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Lỗi: {e}")
 
+@bot.message_handler(commands=['remove_subscription'])
+def remove_subscription(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.send_message(message.chat.id, "⚠️ Bạn không phải là admin.")
+        return
+
+    try:
+        user_id = int(message.text.split()[1])
+        if user_id not in user_subscriptions:
+            bot.send_message(message.chat.id, f"⚠️ Người dùng `{user_id}` không có gói nào.", parse_mode="Markdown")
+            return
+
+        del user_subscriptions[user_id]
+        remove_subscription_db(user_id)
+
+        bot.send_message(message.chat.id, f"✅ Đã xóa gói của người dùng `{user_id}`.", parse_mode="Markdown")
+        bot.send_message(user_id, "⚠️ Gói của bạn đã bị hủy. Bạn không thể tiếp tục sử dụng bot.")
+
+    except ValueError:
+        bot.send_message(message.chat.id, "⚠️ Sai cú pháp. Dùng:\n`/remove_subscription <user_id>`", parse_mode="Markdown")
+    except Exception as e:
+        bot.send_message(message.chat.id, f"❌ Lỗi: {e}")
+
+@bot.message_handler(commands=['user_files'])
+def show_user_files(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.send_message(message.chat.id, "⚠️ Bạn không phải là admin.")
+        return
+
+    try:
+        user_id = int(message.text.split()[1])
+        if user_id not in user_files or not user_files[user_id]:
+            bot.send_message(message.chat.id, f"⚠️ Người dùng `{user_id}` chưa tải lên file nào.", parse_mode="Markdown")
+            return
+
+        files = "\n".join(f"📄 `{fname}`" for fname in user_files[user_id])
+        bot.send_message(message.chat.id, f"📂 Danh sách file của `{user_id}`:\n{files}", parse_mode="Markdown")
+
+    except ValueError:
+            bot.send_message(message.chat.id, "⚠️ Sai cú pháp. Dùng:\n`/user_files <user_id>`", parse_mode="Markdown")
+    except Exception as e:
+        bot.send_message(message.chat.id, f"❌ Lỗi: {e}")
+
+@bot.message_handler(commands=['lock'])
+def lock_bot(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.send_message(message.chat.id, "⚠️ Bạn không phải là admin.")
+        return
+
+    global bot_locked
+    bot_locked = True
+
+    bot.send_message(message.chat.id, "🔒 Bot đã được khóa.")
+
+@bot.message_handler(commands=['unlock'])
+def unlock_bot(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.send_message(message.chat.id, "⚠️ Bạn không phải là admin.")
+        return
+
+    global bot_locked
+    bot_locked = False
+
+    bot.send_message(message.chat.id, "🔓 Bot đã được mở khóa.")
+
+@bot.callback_query_handler(func=lambda call: call.data == 'lock_bot')
+def lock_bot_callback(call):
+    if call.from_user.id != ADMIN_ID:
+        bot.send_message(message.chat.id, "⚠️ Bạn không phải là admin.")
+        return
+
+    global bot_locked
+    bot_locked = True
+    
+    bot.send_message(call.message.chat.id, "🔒 Đã khóa bot.")
+
+@bot.callback_query_handler(func=lambda call: call.data == 'unlock_bot')
+def unlock_bot_callback(call):
+    if call.from_user.id != ADMIN_ID:
+        bot.send_message(message.chat.id, "⚠️ Bạn không phải là admin.")
+        return
+
+    global bot_locked
+    bot_locked = False
+
+    bot.send_message(call.message.chat.id, "🔓 Bot đã được mở khóa.")
+
+@bot.callback_query_handler(func=lambda call: call.data == 'free_mode')
+def toggle_free_mode(call):
+    if call.from_user.id != ADMIN_ID:
+        bot.send_message(message.chat.id, "⚠️ Bạn không phải là admin.")
+        return
+
+    global free_mode
+    free_mode = not free_mode
+    status = "open" if free_mode else "closed"
+
+    bot.send_message(call.message.chat.id, f"🔓 Chế độ miễn phí hiện tại là:: {status}.")
+
+@bot.message_handler(content_types=['document'])
+def handle_file(message):
+    user_id = message.from_user.id
+    if bot_locked:
+        bot.reply_to(message, f"⚠️ Bot hiện đang bị khóa. Liên hệ @{ADMIN_USERNAME}.")
+        return
+
+    if not (free_mode or (user_id in user_subscriptions and user_subscriptions[user_id]['expiry'] > datetime.now())):
+        return bot.reply_to(message, f"⚠️ Bạn cần đăng ký để sử dụng. Liên hệ @{ADMIN_USERNAME}.")
+
+    file = message.document
+    file_name = file.file_name
+
+    if not file_name.endswith(('.py', '.zip')):
+        bot.reply_to(message, "⚠️ Chỉ chấp nhận file Python (.py) hoặc file nén .zip.")
+        return
+    try:
+        file_info = bot.get_file(file.file_id)
+        file_data = bot.download_file(file_info.file_path)
+
+        timestamp = int(time.time())
+        safe_file_name = f"{user_id}_{timestamp}_{file_name}"
+
+        if file_name.endswith('.zip'):
+            with tempfile.TemporaryDirectory() as temp_dir:
+                zip_path = os.path.join(temp_dir, safe_file_name)
+                with open(zip_path, 'wb') as f:
+                    f.write(file_data)
+
+                extract_path = os.path.join(temp_dir, 'unzipped')
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(extract_path)
+
+                extracted_files = []
+                for root, _, files in os.walk(extract_path):
+                    extracted_files.extend([os.path.join(root, f) for f in files])
+
+                if len(extracted_files) > 50:
+                    return bot.reply_to(message, "❌ File zip chứa quá nhiều file. Giới hạn là 50.")
+
+                final_path = os.path.join(uploaded_files_dir, f"{file_name.split('.')[0]}_{user_id}_{timestamp}")
+                os.makedirs(final_path, exist_ok=True)
+
+                for file_path in extracted_files:
+                    shutil.move(file_path, os.path.join(final_path, os.path.basename(file_path)))
+
+                py_files = [f for f in os.listdir(final_path) if f.endswith('.py')]
+                if not py_files:
+                    return bot.send_message(message.chat.id, "❌ Không tìm thấy file `.py` trong file nén.")
+
+                run_script(os.path.join(final_path, py_files[0]), message.chat.id, final_path, py_files[0], message)
+
+        else:
+            final_path = os.path.join(uploaded_files_dir, safe_file_name)
+            with open(final_path, 'wb') as f:
+                f.write(file_data)
+
+            run_script(final_path, message.chat.id, uploaded_files_dir, safe_file_name, message)
+
+        user_files.setdefault(user_id, []).append(file_name)
+        save_user_file(user_id, file_name)
+
+    except Exception as e:
+        bot.reply_to(message, f"❌ Đã xảy ra lỗi xử lý file:\n`{e}`", parse_mode="Markdown")
+
+def run_script(script_path, chat_id, folder_path, file_name, original_message):
+    try:
+        requirements_path = os.path.join(os.path.dirname(script_path), 'requirements.txt')
+        if os.path.exists(requirements_path):
+            bot.send_message(chat_id, "🔄 Đang cài requirements......")
+            subprocess.check_call(['pip', 'install', '-r', requirements_path])
+
+        bot.send_message(chat_id, f"🚀 Đang chạy bot: {file_name}...")
+        process = subprocess.Popen(['python3', script_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        bot_scripts[chat_id] = {'process': process, 'folder_path': folder_path}
+
+        username = f"@{original_message.from_user.username}" if original_message.from_user.username else str(original_message.from_user.id)
+        token = extract_token_from_script(script_path)
+        
+        if token:
+            try:
+                bot_username = requests.get(f'https://api.telegram.org/bot{token}/getMe').json()['result']['username']
+                caption = f"📤 Người dùng {username} đã tải lên một bot mới. Bot username: @{bot_username}"
+            except:
+                caption = f"📤 Người dùng {username} đã tải lên bot nhưng không lấy được username"
+        else:
+            caption = f"📤 Người dùng {username} đã tải lên file không chứa token."
+
+        with open(script_path, 'rb') as f:
+            bot.send_document(ADMIN_ID, f, caption=caption)
+
+        markup = types.InlineKeyboardMarkup()
+        markup.add(
+            types.InlineKeyboardButton(f"🔴 Dừng {file_name}", callback_data=f'stop_{chat_id}_{file_name}'),
+            types.InlineKeyboardButton(f"🗑️ Xóa {file_name}", callback_data=f'delete_{chat_id}_{file_name}')
+        )
+        bot.send_message(chat_id, "🎛️ Điều khiển bot bằng các nút bên dưới:", reply_markup=markup)  
+
+    except Exception as e:
+        bot.send_message(chat_id, f"❌ Lỗi khi chạy bot:\n{e}")
+
+def extract_token_from_script(script_path):
+    try:
+        with open(script_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        match = re.search(r"['\"](\d{9,10}:[\w-]+)['\"]", content)
+        return match.group(1) if match else None
+    except Exception as e:
+        return None
+
+def get_custom_file_to_run(message):
+    chat_id = message.chat.id
+    user_input = message.text.strip()
+
+    # Kiểm tra người dùng đã chạy bot nào chưa
+    if chat_id not in bot_scripts or 'folder_path' not in bot_scripts[chat_id]:
+        bot.send_message(chat_id, "⚠️ Bạn chưa có bot nào đang chạy hoặc dữ liệu bị thiếu.")
+        return
+
+    folder_path = bot_scripts[chat_id]['folder_path']
+    custom_file_path = os.path.join(folder_path, user_input)
+
+    if not os.path.isfile(custom_file_path):
+        bot.send_message(chat_id, f"❌ Không tìm thấy file `{user_input}`. Vui lòng kiểm tra tên file.", parse_mode="Markdown")
+        return
+
+    try:
+        run_script(custom_file_path, chat_id, folder_path, user_input, message)
+    except Exception as e:
+        bot.send_message(chat_id, f"❌ Lỗi khi chạy file: {e}")
+
 @bot.callback_query_handler(func=lambda call: True)
-def xu_ly_yeu_cau_callback(call):
+def callback_query(call):
     if call.data.startswith('stop_'):
         chat_id = int(call.data.split('_')[1])
-        dung_bot_dang_chay(chat_id)
+        stop_running_bot(chat_id)
     elif call.data.startswith('delete_'):
         chat_id = int(call.data.split('_')[1])
-        xoa_tap_tin_tai_len(chat_id)
+        delete_uploaded_file(chat_id)
 
-def dung_bot_dang_chay(chat_id):
+def stop_running_bot(chat_id):
     if chat_id in bot_scripts and 'process' in bot_scripts[chat_id]:
-        huy_tien_trinh_cay(bot_scripts[chat_id]['process'])
-        bot.send_message(chat_id, "🔴 Bot đã dừng.")
+        kill_process_tree(bot_scripts[chat_id]['process'])
+        bot.send_message(chat_id, "🔴 Bot stopped.")
     else:
-        bot.send_message(chat_id, "⚠️ Hiện không có bot nào đang chạy.")
+        bot.send_message(chat_id, "⚠️ No bot is currently running.")
 
-def xoa_tap_tin_tai_len(chat_id):
+def delete_uploaded_file(chat_id):
     if chat_id in bot_scripts and 'folder_path' in bot_scripts[chat_id]:
-        duong_dan_thu_muc = bot_scripts[chat_id]['folder_path']
-        if os.path.exists(duong_dan_thu_muc):
-            shutil.rmtree(duong_dan_thu_muc)
-            bot.send_message(chat_id, f"🗑️ Tệp bot đã bị xóa.")
+        folder_path = bot_scripts[chat_id]['folder_path']
+        if os.path.exists(folder_path):
+            shutil.rmtree(folder_path)
+            bot.send_message(chat_id, f"🗑️ Bot files deleted.")
         else:
-            bot.send_message(chat_id, "⚠️ Tệp không tồn tại.")
+            bot.send_message(chat_id, "⚠️ Files don't exist.")
     else:
-        bot.send_message(chat_id, "⚠️ Không có tệp bot nào để xóa.")
+        bot.send_message(chat_id, "⚠️ No bot files to delete.")
 
-def huy_tien_trinh_cay(tien_trinh):
+def kill_process_tree(process):
     try:
-        cha = psutil.Process(tien_trinh.pid)
-        con = cha.children(recursive=True)
-        for con_hang in con:
-            con_hang.kill()
-        cha.kill()
+        parent = psutil.Process(process.pid)
+        children = parent.children(recursive=True)
+        for child in children:
+            child.kill()
+        parent.kill()
     except Exception as e:
-        print(f"❌ Không thể hủy tiến trình: {e}")
+        print(f"❌ Failed to kill process: {e}")
 
 @bot.message_handler(commands=['delete_user_file'])
-def xoa_tap_tin_nguoi_dung(message):
+def delete_user_file(message):
     if message.from_user.id == ADMIN_ID:
         try:
             user_id = int(message.text.split()[1])
-            ten_tap_tin = message.text.split()[2]
+            file_name = message.text.split()[2]
             
-            if user_id in user_files and ten_tap_tin in user_files[user_id]:
-                duong_dan_tap_tin = os.path.join(thu_muc_tai_len, ten_tap_tin)
-                if os.path.exists(duong_dan_tap_tin):
-                    os.remove(duong_dan_tap_tin)
-                    user_files[user_id].remove(ten_tap_tin)
-                    xoa_tap_tin_nguoi_dung_db(user_id, ten_tap_tin)
-                    bot.send_message(message.chat.id, f"✅ Đã xóa tệp {ten_tap_tin} của người dùng {user_id}.")
+            if user_id in user_files and file_name in user_files[user_id]:
+                file_path = os.path.join(uploaded_files_dir, file_name)
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    user_files[user_id].remove(file_name)
+                    remove_user_file_db(user_id, file_name)
+                    bot.send_message(message.chat.id, f"✅ Deleted file {file_name} for user {user_id}.")
                 else:
-                    bot.send_message(message.chat.id, f"⚠️ Tệp {ten_tap_tin} không tồn tại.")
+                    bot.send_message(message.chat.id, f"⚠️ File {file_name} doesn't exist.")
             else:
-                bot.send_message(message.chat.id, f"⚠️ Người dùng {user_id} chưa tải lên tệp {ten_tap_tin}.")
+                bot.send_message(message.chat.id, f"⚠️ User {user_id} hasn't uploaded file {file_name}.")
         except Exception as e:
-            bot.send_message(message.chat.id, f"❌ Lỗi: {e}")
+            bot.send_message(message.chat.id, f"❌ Error: {e}")
     else:
-        bot.send_message(message.chat.id, "⚠️ Bạn không phải là nhà phát triển.")
+        bot.send_message(message.chat.id, "⚠️ You are not the developer.")
 
 @bot.message_handler(commands=['stop_user_bot'])
-def dung_bot_nguoi_dung(message):
+def stop_user_bot(message):
     if message.from_user.id == ADMIN_ID:
         try:
             user_id = int(message.text.split()[1])
-            ten_tap_tin = message.text.split()[2]
+            file_name = message.text.split()[2]
             
-            if user_id in user_files and ten_tap_tin in user_files[user_id]:
-                for chat_id, thong_tin_kich_ban in bot_scripts.items():
-                    if thong_tin_kich_ban.get('folder_path', '').endswith(ten_tap_tin.split('.')[0]):
-                        huy_tien_trinh_cay(thong_tin_kich_ban['process'])
-                        bot.send_message(chat_id, f"🔴 Đã dừng bot {ten_tap_tin}.")
-                        bot.send_message(message.chat.id, f"✅ Đã dừng bot {ten_tap_tin} của người dùng {user_id}.")
+            if user_id in user_files and file_name in user_files[user_id]:
+                for chat_id, script_info in bot_scripts.items():
+                    if script_info.get('folder_path', '').endswith(file_name.split('.')[0]):
+                        kill_process_tree(script_info['process'])
+                        bot.send_message(chat_id, f"🔴 Stopped bot {file_name}.")
+                        bot.send_message(message.chat.id, f"✅ Stopped bot {file_name} for user {user_id}.")
                         break
                 else:
-                    bot.send_message(message.chat.id, f"⚠️ Bot {ten_tap_tin} không đang chạy.")
+                    bot.send_message(message.chat.id, f"⚠️ Bot {file_name} is not running.")
             else:
-                bot.send_message(message.chat.id, f"⚠️ Người dùng {user_id} chưa tải lên tệp {ten_tap_tin}.")
+                bot.send_message(message.chat.id, f"⚠️ User {user_id} hasn't uploaded file {file_name}.")
         except Exception as e:
-            bot.send_message(message.chat.id, f"❌ Lỗi: {e}")
+            bot.send_message(message.chat.id, f"❌ Error: {e}")
     else:
-        bot.send_message(message.chat.id, "⚠️ Bạn không phải là nhà phát triển.")
+        bot.send_message(message.chat.id, "⚠️ You are not the developer.")
 
 bot.infinity_polling()
