@@ -245,6 +245,7 @@ def remove_subscription(message):
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
     user_id = call.from_user.id
+    global bot_locked, free_mode
     
     if call.data == 'upload':
         if bot_locked:
@@ -274,13 +275,13 @@ def callback_query(call):
         bot.send_message(user_id, stats_msg)
     
     elif call.data == 'toggle_lock' and is_admin(user_id):
-        global bot_locked
+        #global bot_locked
         bot_locked = not bot_locked
         status = "🔒 Đã khóa" if bot_locked else "🔓 Đã mở khóa"
         bot.send_message(user_id, f"{status} bot.")
     
     elif call.data == 'toggle_free' and is_admin(user_id):
-        global free_mode
+        #global free_mode
         free_mode = not free_mode
         status = "bật" if free_mode else "tắt"
         bot.send_message(user_id, f"🔓 Chế độ miễn phí đã {status}.")
