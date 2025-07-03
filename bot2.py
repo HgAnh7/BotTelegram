@@ -392,7 +392,7 @@ def process_py_file(file_data, safe_file_name, user_id, message):
     with open(final_path, 'wb') as f:
         f.write(file_data)
     
-    run_script(final_path, message.chat.id, UPLOAD_DIR, safe_file_name, message)
+    run_script(final_path, message.chat.id, final_path, safe_file_name, message)
 
 def run_script(script_path, chat_id, folder_path, file_name, original_message):
     try:
@@ -446,9 +446,14 @@ def stop_running_bot(chat_id):
 def delete_uploaded_file(chat_id):
     if chat_id in bot_scripts and 'folder_path' in bot_scripts[chat_id]:
         folder_path = bot_scripts[chat_id]['folder_path']
-        if os.path.exists(folder_path):
-            shutil.rmtree(folder_path)
+        
+        # Check if it's a single file or directory
+        if os.path.isfile(folder_path):
+            os.remove(folder_path)
             bot.send_message(chat_id, "🗑️ Đã xóa file bot.")
+        elif os.path.isdir(folder_path):
+            shutil.rmtree(folder_path)
+            bot.send_message(chat_id, "🗑️ Đã xóa thư mục bot.")
         else:
             bot.send_message(chat_id, "⚠️ File không tồn tại.")
         
