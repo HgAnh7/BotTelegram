@@ -10,6 +10,7 @@ import sqlite3
 from telebot import types
 from datetime import datetime, timedelta
 import psutil
+import time
 
 # Cấu hình cơ bản
 TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -167,6 +168,7 @@ def send_welcome(message):
 # Xử lý tin nhắn văn bản
 @bot.message_handler(content_types=['text'])
 def handle_text(message):
+    global bot_locked, free_mode
     user_id = message.from_user.id
     text = message.text
 
@@ -204,17 +206,14 @@ def handle_text(message):
             bot.send_message(user_id, f"📊 Thống kê:\n\n📂 File đã tải lên: {total_files}\n👤 Tổng người dùng: {total_users}\n👥 Người dùng hoạt động: {active_users_count}")
         
         elif text == '🔒 Khóa Bot':
-            global bot_locked
             bot_locked = True
             bot.send_message(user_id, "🔒 Bot đã bị khóa.")
         
         elif text == '🔓 Mở Khóa Bot':
-            global bot_locked
             bot_locked = False
             bot.send_message(user_id, "🔓 Bot đã được mở khóa.")
         
         elif text == '🔓 Chế Độ Miễn Phí':
-            global free_mode
             free_mode = not free_mode
             status = "mở" if free_mode else "đóng"
             bot.send_message(user_id, f"🔓 Chế độ miễn phí hiện: {status}.")
