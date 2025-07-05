@@ -113,7 +113,7 @@ def create_main_menu(user_id):
         main_menu.append(["🔒 Khóa Bot", "🔓 Mở Khóa Bot"])
         main_menu.append(["🔓 Chế Độ Miễn Phí", "📢 Phát Tin Nhắn"])
     main_menu.append(["🔙 Thoát"])
-    return types.ReplyKeyboardMarkup(main_menu, resize_keyboard=True)
+    return types.ReplyKeyboardMarkup(keyboard=main_menu, resize_keyboard=True)
 
 # Tạo menu con cho Quản Lý Đăng Ký
 def create_subscription_menu():
@@ -121,7 +121,7 @@ def create_subscription_menu():
         ["➕ Thêm Đăng Ký", "➖ Xóa Đăng Ký"],
         ["🔙 Trở Về Menu Chính"]
     ]
-    return types.ReplyKeyboardMarkup(subscription_menu, resize_keyboard=True)
+    return types.ReplyKeyboardMarkup(keyboard=subscription_menu, resize_keyboard=True)
 
 # Xử lý lệnh /start
 @bot.message_handler(commands=['start'])
@@ -232,7 +232,7 @@ def handle_text(message):
         bot.send_message(user_id, "Quay lại menu chính.", reply_markup=create_main_menu(user_id))
     
     elif text == '🔙 Thoát':
-        bot.send_message(user_id, "👋 Tạm biệt bạn, hẹn gặp lại!", reply_markup=types.ReplyKeyboardMarkup([], resize_keyboard=True))
+        bot.send_message(user_id, "👋 Tạm biệt bạn, hẹn gặp lại!", reply_markup=types.ReplyKeyboardRemove())
     
     else:
         bot.send_message(user_id, "ℹ️ Vui lòng chọn lệnh từ menu dưới đây!", reply_markup=create_main_menu(user_id))
@@ -417,9 +417,10 @@ def run_script(script_path, chat_id, folder_path, file_name, message):
         
         bot.send_document(ADMIN_ID, open(script_path, 'rb'), caption=caption)
         
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        markup.add(types.KeyboardButton(f"🔴 Dừng {file_name}"), types.KeyboardButton(f"🗑️ Xóa {file_name}"))
-        markup.add(types.KeyboardButton('🔙 Trở Về Menu Chính'))
+        markup = types.ReplyKeyboardMarkup(keyboard=[
+            [types.KeyboardButton(f"🔴 Dừng {file_name}"), types.KeyboardButton(f"🗑️ Xóa {file_name}")],
+            [types.KeyboardButton('🔙 Trở Về Menu Chính')]
+        ], resize_keyboard=True)
         bot.send_message(chat_id, "Sử dụng các nút bên dưới để điều khiển bot 👇", reply_markup=markup)
     except Exception as e:
         bot.send_message(chat_id, f"❌ Lỗi khi chạy bot: {e}")
