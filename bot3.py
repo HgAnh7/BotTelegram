@@ -104,20 +104,24 @@ load_data()
 
 # Tạo menu chính với ReplyKeyboardMarkup
 def create_main_menu(user_id):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add(types.KeyboardButton('📤 Tải Lên File'))
-    markup.add(types.KeyboardButton('⚡ Tốc Độ Bot'))
-    markup.add(types.KeyboardButton(f'📞 Liên Hệ Chủ Sở Hữu @{ADMIN_USERNAME}'))
-    
+    main_menu = [
+        ["📤 Tải Lên File", "⚡ Tốc Độ Bot"],
+        [f"📞 Liên Hệ Chủ Sở Hữu @{ADMIN_USERNAME}"]
+    ]
     if user_id == ADMIN_ID:
-        markup.add(types.KeyboardButton('💳 Quản Lý Đăng Ký'))
-        markup.add(types.KeyboardButton('📊 Thống Kê'))
-        markup.add(types.KeyboardButton('🔒 Khóa Bot'))
-        markup.add(types.KeyboardButton('🔓 Mở Khóa Bot'))
-        markup.add(types.KeyboardButton('🔓 Chế Độ Miễn Phí'))
-        markup.add(types.KeyboardButton('📢 Phát Tin Nhắn'))
-    
-    return markup
+        main_menu.append(["💳 Quản Lý Đăng Ký", "📊 Thống Kê"])
+        main_menu.append(["🔒 Khóa Bot", "🔓 Mở Khóa Bot"])
+        main_menu.append(["🔓 Chế Độ Miễn Phí", "📢 Phát Tin Nhắn"])
+    main_menu.append(["🔙 Thoát"])
+    return types.ReplyKeyboardMarkup(main_menu, resize_keyboard=True)
+
+# Tạo menu con cho Quản Lý Đăng Ký
+def create_subscription_menu():
+    subscription_menu = [
+        ["➕ Thêm Đăng Ký", "➖ Xóa Đăng Ký"],
+        ["🔙 Trở Về Menu Chính"]
+    ]
+    return types.ReplyKeyboardMarkup(subscription_menu, resize_keyboard=True)
 
 # Xử lý lệnh /start
 @bot.message_handler(commands=['start'])
@@ -176,7 +180,7 @@ def handle_text(message):
         if bot_locked:
             bot.send_message(user_id, f"⚠️ Bot hiện đang bị khóa. Liên hệ chủ sở hữu @{ADMIN_USERNAME}.")
         elif free_mode or (user_id in user_subscriptions and user_subscriptions[user_id]['expiry'] > datetime.now()):
-            bot.send_message(user_id, "📄 V vui lòng gửi file bạn muốn tải lên.")
+            bot.send_message(user_id, "📄 Vui lòng gửi file bạn muốn tải lên.")
         else:
             bot.send_message(user_id, f"⚠️ Bạn cần đăng ký để sử dụng tính năng này. Liên hệ chủ sở hữu @{ADMIN_USERNAME}.")
     
@@ -192,44 +196,46 @@ def handle_text(message):
     elif text == f'📞 Liên Hệ Chủ Sở Hữu @{ADMIN_USERNAME}':
         bot.send_message(user_id, f"📞 Vui lòng liên hệ chủ sở hữu qua @{ADMIN_USERNAME}")
     
-    elif user_id == ADMIN_ID:
-        if text == '💳 Quản Lý Đăng Ký':
-            markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-            markup.add(types.KeyboardButton('➕ Thêm Đăng Ký'), types.KeyboardButton('➖ Xóa Đăng Ký'))
-            markup.add(types.KeyboardButton('🔙 Trở Về Menu Chính'))
-            bot.send_message(user_id, "Chọn hành động:", reply_markup=markup)
-        
-        elif text == '📊 Thống Kê':
-            total_files = sum(len(files) for files in user_files.values())
-            total_users = len(user_files)
-            active_users_count = len(active_users)
-            bot.send_message(user_id, f"📊 Thống kê:\n\n📂 File đã tải lên: {total_files}\n👤 Tổng người dùng: {total_users}\n👥 Người dùng hoạt động: {active_users_count}")
-        
-        elif text == '🔒 Khóa Bot':
-            bot_locked = True
-            bot.send_message(user_id, "🔒 Bot đã bị khóa.")
-        
-        elif text == '🔓 Mở Khóa Bot':
-            bot_locked = False
-            bot.send_message(user_id, "🔓 Bot đã được mở khóa.")
-        
-        elif text == '🔓 Chế Độ Miễn Phí':
-            free_mode = not free_mode
-            status = "mở" if free_mode else "đóng"
-            bot.send_message(user_id, f"🔓 Chế độ miễn phí hiện: {status}.")
-        
-        elif text == '📢 Phát Tin Nhắn':
-            bot.send_message(user_id, "Gửi tin nhắn bạn muốn phát:")
-            bot.register_next_step_handler(message, process_broadcast_message)
-        
-        elif text == '➕ Thêm Đăng Ký':
-            bot.send_message(user_id, "Gửi ID người dùng và số ngày theo định dạng:\n/add_subscription <user_id> <days>")
-        
-        elif text == '➖ Xóa Đăng Ký':
-            bot.send_message(user_id, "Gửi ID người dùng theo định dạng:\n/remove_subscription <user_id>")
-        
-        elif text == '🔙 Trở Về Menu Chính':
-            bot.send_message(user_id, "Quay lại menu chính.", reply_markup=create_main_menu(user_id))
+    elif text == '💳 Quản Lý Đăng Ký' and user_id == ADMIN_ID:
+        bot.send_message(user_id, "Chọn hành động:", reply_markup=create_subscription_menu())
+    
+    elif text == '📊 Thống Kê' and user_id == ADMIN_ID:
+        total_files = sum(len(files) for files in user_files.values())
+        total_users = len(user_files)
+        active_users_count = len(active_users)
+        bot.send_message(user_id, f"📊 Thống kê:\n\n📂 File đã tải lên: {total_files}\n👤 Tổng người dùng: {total_users}\n👥 Người dùng hoạt động: {active_users_count}")
+    
+    elif text == '🔒 Khóa Bot' and user_id == ADMIN_ID:
+        bot_locked = True
+        bot.send_message(user_id, "🔒 Bot đã bị khóa.")
+    
+    elif text == '🔓 Mở Khóa Bot' and user_id == ADMIN_ID:
+        bot_locked = False
+        bot.send_message(user_id, "🔓 Bot đã được mở khóa.")
+    
+    elif text == '🔓 Chế Độ Miễn Phí' and user_id == ADMIN_ID:
+        free_mode = not free_mode
+        status = "mở" if free_mode else "đóng"
+        bot.send_message(user_id, f"🔓 Chế độ miễn phí hiện: {status}.")
+    
+    elif text == '📢 Phát Tin Nhắn' and user_id == ADMIN_ID:
+        bot.send_message(user_id, "Gửi tin nhắn bạn muốn phát:")
+        bot.register_next_step_handler(message, process_broadcast_message)
+    
+    elif text == '➕ Thêm Đăng Ký' and user_id == ADMIN_ID:
+        bot.send_message(user_id, "Gửi ID người dùng và số ngày theo định dạng:\n/add_subscription <user_id> <days>")
+    
+    elif text == '➖ Xóa Đăng Ký' and user_id == ADMIN_ID:
+        bot.send_message(user_id, "Gửi ID người dùng theo định dạng:\n/remove_subscription <user_id>")
+    
+    elif text == '🔙 Trở Về Menu Chính':
+        bot.send_message(user_id, "Quay lại menu chính.", reply_markup=create_main_menu(user_id))
+    
+    elif text == '🔙 Thoát':
+        bot.send_message(user_id, "👋 Tạm biệt bạn, hẹn gặp lại!", reply_markup=types.ReplyKeyboardMarkup([], resize_keyboard=True))
+    
+    else:
+        bot.send_message(user_id, "ℹ️ Vui lòng chọn lệnh từ menu dưới đây!", reply_markup=create_main_menu(user_id))
 
 # Xử lý phát tin nhắn
 def process_broadcast_message(message):
