@@ -16,6 +16,6 @@ def send_images():
             bot.send_photo(CHANNEL_ID, url)
         except:
             pass
-        time.sleep(3)
+        time.sleep(10)
 
 send_images()
