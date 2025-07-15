@@ -3,7 +3,7 @@ import time
 import telebot
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHANNEL_ID = "-1002795920037"  # hoặc -100xxxxxxxxxx
+CHANNEL_ID = "-1002795920037"  # ID kênh
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -14,10 +14,16 @@ def send_images():
     for url in urls:
         try:
             bot.send_photo(CHANNEL_ID, url)
-        except:
-            pass
+        except Exception as e:
+            print(f"Lỗi gửi ảnh: {e}")
         time.sleep(5)
 
+@bot.message_handler(commands=['img'])
+def handle_img(message):
+    # Đảm bảo lệnh chỉ xử lý khi được gửi từ kênh (channel)
+    if str(message.chat.id) == CHANNEL_ID:
+        send_images()
+
 if __name__ == "__main__":
-    time.sleep(300)
-    send_images()
+    print("Bot đang chạy...")
+    bot.infinity_polling()
