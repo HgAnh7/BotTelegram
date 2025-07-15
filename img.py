@@ -1,4 +1,3 @@
-Sửa lại code thay vì đợi 300s chạy thì thành chạy khi có người dùng lệnh img trong kênh:
 import os
 import time
 import telebot
