@@ -8,7 +8,7 @@ CHANNEL_ID = "-1002795920037888888888888888888"  # ID kênh
 bot = telebot.TeleBot(TOKEN)
 
 def send_images():
-	with open("url.txt", "r") as f:
+	with open("urls.txt", "r") as f:
 		urls = [line.strip() for line in f if line.strip()]
 
 	for url in urls:
