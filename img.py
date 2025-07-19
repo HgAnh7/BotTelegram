@@ -3,7 +3,7 @@ import time
 import telebot
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHANNEL_ID = "-1002767256788"  # ID kênh
+CHANNEL_ID = "-10027959200370"  # ID kênh
 
 bot = telebot.TeleBot(TOKEN)
 
